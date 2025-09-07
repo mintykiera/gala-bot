@@ -1,5 +1,19 @@
 {
-  "active": {},
+  "active": {
+    "23112025": {
+      "id": "23112025",
+      "title": "PASKOMIKET 2025",
+      "details": "Awaiting enthusiasm check for PASKOMIKET 2025!!! Interest check below 😜",
+      "status": "open",
+      "participants": [],
+      "messageId": null,
+      "channelId": "1414282638801502218",
+      "authorId": "868546064498688000",
+      "authorUsername": "kieraesque",
+      "roleId": "1414326227807764612",
+      "pingSent": false
+    }
+  },
   "completed": {
     "09092025": {
       "id": "09092025",
