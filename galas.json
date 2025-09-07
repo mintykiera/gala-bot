@@ -1,10 +1,11 @@
 {
-  "active": {
+  "active": {},
+  "completed": {
     "09092025": {
       "id": "09092025",
       "title": "new gala",
       "details": "YAYAYAY new gala test",
-      "status": "open",
+      "status": "cancelled",
       "participants": [
         {
           "id": "868546064498688000",
@@ -18,6 +19,5 @@
       "roleId": "1414316002514305265",
       "pingSent": false
     }
-  },
-  "completed": {}
+  }
 }
