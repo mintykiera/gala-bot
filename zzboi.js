@@ -14,6 +14,7 @@ const {
 const dotenv = require("dotenv");
 const fs = require("fs").promises;
 const path = require("path");
+const { Octokit } = require("octokit");
 
 dotenv.config();
 
@@ -33,6 +34,10 @@ const client = new Client({
 const galas = new Map();
 const completedGalas = new Map();
 const buttonCooldowns = new Map();
+
+const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
+const GITHUB_REPO = process.env.GITHUB_REPO; // e.g. "mintykiera/gala-bot"
+const GITHUB_FILE_PATH = process.env.GITHUB_FILE_PATH || "galas.json";
 
 const commands = [
   new SlashCommandBuilder()
@@ -141,8 +146,17 @@ async function deployCommands() {
 
 async function loadGalas() {
   try {
-    const data = await fs.readFile(DATA_FILE, "utf8");
-    const stored = JSON.parse(data);
+    const { data } = await octokit.request(
+      "GET /repos/{owner}/{repo}/contents/{path}",
+      {
+        owner: GITHUB_REPO.split("/")[0],
+        repo: GITHUB_REPO.split("/")[1],
+        path: GITHUB_FILE_PATH,
+      }
+    );
+
+    const content = Buffer.from(data.content, "base64").toString("utf8");
+    const stored = JSON.parse(content);
 
     if (stored.active && typeof stored.active === "object") {
       for (const [id, gala] of Object.entries(stored.active)) {
@@ -186,34 +200,55 @@ async function loadGalas() {
       `Loaded ${galas.size} active, ${completedGalas.size} completed galas.`
     );
   } catch (err) {
-    if (err.code !== "ENOENT") console.error("Error loading data:", err);
-    else console.log("No saved data — starting fresh.");
+    if (err.status === 404) {
+      console.log("No galas.json found on GitHub — starting fresh.");
+      await saveGalas(); // Create empty file
+    } else {
+      console.error("Error loading galas from GitHub:", err);
+    }
   }
 }
 
 async function saveGalas() {
   try {
+    // Get current file SHA (needed for update)
+    let currentSha;
+    try {
+      const { data } = await octokit.request(
+        "GET /repos/{owner}/{repo}/contents/{path}",
+        {
+          owner: GITHUB_REPO.split("/")[0],
+          repo: GITHUB_REPO.split("/")[1],
+          path: GITHUB_FILE_PATH,
+        }
+      );
+      currentSha = data.sha;
+    } catch (err) {
+      if (err.status !== 404) throw err;
+      currentSha = null; // File doesn't exist yet
+    }
+
     const data = {
-      active: {},
-      completed: {},
+      active: Object.fromEntries(galas.entries()),
+      completed: Object.fromEntries(completedGalas.entries()),
     };
 
-    for (const [id, gala] of galas.entries()) {
-      if (gala && typeof gala === "object") {
-        data.active[id] = { ...gala };
-      }
-    }
+    const content = Buffer.from(JSON.stringify(data, null, 2)).toString(
+      "base64"
+    );
 
-    for (const [id, gala] of completedGalas.entries()) {
-      if (gala && typeof gala === "object") {
-        data.completed[id] = { ...gala };
-      }
-    }
+    await octokit.request("PUT /repos/{owner}/{repo}/contents/{path}", {
+      owner: GITHUB_REPO.split("/")[0],
+      repo: GITHUB_REPO.split("/")[1],
+      path: GITHUB_FILE_PATH,
+      message: "💾 Auto-save gala data",
+      content: content,
+      sha: currentSha, // Required if file exists
+    });
 
-    await fs.writeFile(DATA_FILE, JSON.stringify(data, null, 2));
-    console.log("💾 Gala data saved successfully.");
+    console.log("✅ Gala data saved to GitHub successfully.");
   } catch (err) {
-    console.error("Error saving gala data:", err);
+    console.error("Error saving gala data to GitHub:", err);
   }
 }
 
