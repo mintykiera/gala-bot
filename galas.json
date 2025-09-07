@@ -5,7 +5,12 @@
       "title": "new gala",
       "details": "YAYAYAY new gala test",
       "status": "open",
-      "participants": [],
+      "participants": [
+        {
+          "id": "868546064498688000",
+          "username": "kieraesque"
+        }
+      ],
       "messageId": "1414316004351414283",
       "channelId": "1414282638801502218",
       "authorId": "868546064498688000",
