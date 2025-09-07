@@ -5,7 +5,12 @@
       "title": "PASKOMIKET 2025",
       "details": "Awaiting enthusiasm check for PASKOMIKET 2025!!! Interest check below 😜",
       "status": "open",
-      "participants": [],
+      "participants": [
+        {
+          "id": "868546064498688000",
+          "username": "kieraesque"
+        }
+      ],
       "messageId": "1414326231842951178",
       "channelId": "1414282638801502218",
       "authorId": "868546064498688000",
