@@ -114,7 +114,6 @@ const commands = [
     .setName("past-galas")
     .setDescription("See all completed galas and their stats!"),
 
-  // ✅ NEW: Cancel Gala
   new SlashCommandBuilder()
     .setName("cancel-gala")
     .setDescription("Cancel your gala (author only)")
@@ -202,7 +201,7 @@ async function loadGalas() {
   } catch (err) {
     if (err.status === 404) {
       console.log("No galas.json found on GitHub — starting fresh.");
-      await saveGalas(); // Create empty file
+      await saveGalas();
     } else {
       console.error("Error loading galas from GitHub:", err);
     }
@@ -211,7 +210,6 @@ async function loadGalas() {
 
 async function saveGalas() {
   try {
-    // Get current file SHA (needed for update)
     let currentSha;
     try {
       const { data } = await octokit.request(
@@ -225,7 +223,7 @@ async function saveGalas() {
       currentSha = data.sha;
     } catch (err) {
       if (err.status !== 404) throw err;
-      currentSha = null; // File doesn't exist yet
+      currentSha = null;
     }
 
     const data = {
@@ -243,7 +241,7 @@ async function saveGalas() {
       path: GITHUB_FILE_PATH,
       message: "💾 Auto-save gala data",
       content: content,
-      sha: currentSha, // Required if file exists
+      sha: currentSha,
     });
 
     console.log("✅ Gala data saved to GitHub successfully.");
@@ -315,13 +313,13 @@ function createHelpEmbed() {
       {
         name: "📅 /plan",
         value:
-          "`/plan title: 'Summer Ball' date: 24082025 details: 'Dress fancy!'`\n→ Schedule a new gala.",
+          '`/plan title: "Summer Ball" date: 24082025 details: "Dress fancy!"`\n→ Schedule a new gala.',
         inline: false,
       },
       {
         name: "✨ /tweak",
         value:
-          "`/tweak gala-id: 24082025 new-title: 'Winter Ball'`\n→ Edit your gal's name or details.",
+          '`/tweak gala-id: 24082025 new-title: "Winter Ball"`\n→ Edit your gala\'s name or details.',
         inline: false,
       },
       {
@@ -441,22 +439,6 @@ async function dailySchedulerTick() {
   }
 }
 
-async function clearAllCommands() {
-  try {
-    console.log("🧹 Clearing all commands...");
-    await rest.put(
-      Routes.applicationGuildCommands(
-        process.env.CLIENT_ID,
-        process.env.GUILD_ID
-      ),
-      { body: [] }
-    );
-    console.log("All commands cleared.");
-  } catch (error) {
-    console.error("Clear error:", error);
-  }
-}
-
 client.once("clientReady", () => {
   console.log(`🚀 Bot online as ${client.user.tag}`);
   dailySchedulerTick();
@@ -470,16 +452,19 @@ client.on("interactionCreate", async (interaction) => {
     const { commandName } = interaction;
 
     if (commandName === "help") {
+      // ✅ DEFER FIRST to prevent timeout
+      await interaction.deferReply({ ephemeral: true });
       const helpEmbed = createHelpEmbed();
-      return interaction.reply({ embeds: [helpEmbed] });
+      return interaction.editReply({ embeds: [helpEmbed] });
     }
 
     if (commandName === "past-galas") {
+      // ✅ DEFER FIRST to prevent timeout
+      await interaction.deferReply({ ephemeral: true });
       const pastEmbed = createPastGalasEmbed();
-      return interaction.reply({ embeds: [pastEmbed] });
+      return interaction.editReply({ embeds: [pastEmbed] });
     }
 
-    // ✅ NEW: Cancel Gala
     if (commandName === "cancel-gala") {
       const galaId = interaction.options.getString("gala-id");
       if (!galas.has(galaId)) {
@@ -620,6 +605,10 @@ client.on("interactionCreate", async (interaction) => {
         pingSent: false,
       };
 
+      // ✅ Save first to prevent duplicates
+      galas.set(date, newGala);
+      await saveGalas();
+
       const messageComponents = createGalaEmbedAndButtons(newGala);
       const message = await interaction.channel.send(messageComponents);
       newGala.messageId = message.id;
@@ -666,18 +655,20 @@ client.on("interactionCreate", async (interaction) => {
     } else if (commandName === "close-doors") {
       gala.status = "closed";
     } else if (commandName === "peek") {
-      return interaction.reply({
-        ...createGalaEmbedAndButtons(gala),
-        flags: MessageFlags.Ephemeral,
-      });
+      // ✅ DEFER FIRST to prevent timeout
+      await interaction.deferReply({ ephemeral: true });
+      return interaction.editReply(createGalaEmbedAndButtons(gala));
     } else if (commandName === "whats-on") {
+      // ✅ DEFER FIRST to prevent timeout
+      await interaction.deferReply();
+
       if (galas.size === 0) {
-        return interaction.reply("No galas scheduled right now.");
+        return interaction.editReply("No galas scheduled right now.");
       }
       const list = Array.from(galas.values())
         .map((g) => `**${g.title}** (ID: \`${g.id}\`) — ${g.status}`)
         .join("\n");
-      return interaction.reply({
+      return interaction.editReply({
         embeds: [
           new EmbedBuilder()
             .setTitle("🎭 Upcoming Galas")
@@ -758,24 +749,23 @@ client.on("interactionCreate", async (interaction) => {
       await member.roles.remove(role);
     }
 
-    await interaction.message.edit(createGalaEmbedAndButtons(gala));
-    galas.set(galaId, gala);
-    await saveGalas();
-
-    await interaction.reply({
+    // ✅ FIXED: Use update() to avoid double-reply
+    await interaction.update({
+      ...createGalaEmbedAndButtons(gala),
       content: `✅ You've ${action === "join-gala" ? "joined" : "left"} "${
         gala.title
       }"!`,
       flags: MessageFlags.Ephemeral,
     });
+
+    galas.set(galaId, gala);
+    await saveGalas();
   }
 });
 
 async function initialize() {
   await loadGalas();
   await deployCommands();
-  // Uncomment below ONLY to wipe commands:
-  // await clearAllCommands();
 }
 
 initialize().catch(console.error);
