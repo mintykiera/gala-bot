@@ -5,12 +5,17 @@
       "title": "new gala",
       "details": "YAYAYAY new gala test",
       "status": "open",
-      "participants": [],
-      "messageId": "1414316004351414283",
+      "participants": [
+        {
+          "id": "868546064498688000",
+          "username": "kieraesque"
+        }
+      ],
+      "messageId": "1414316004720246996",
       "channelId": "1414282638801502218",
       "authorId": "868546064498688000",
       "authorUsername": "kieraesque",
-      "roleId": "1414316002514305265",
+      "roleId": "1414316002535018498",
       "pingSent": false
     }
   },
