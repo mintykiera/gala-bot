@@ -21,6 +21,61 @@
       "authorUsername": "zzboiii",
       "roleId": "1414452711386120283",
       "pingSent": false
+    },
+    "09102025": {
+      "id": "09102025",
+      "title": "temp",
+      "details": "temp gala for test",
+      "status": "closed",
+      "participants": [],
+      "messageId": "1414451394450165800",
+      "channelId": "1414282638801502218",
+      "authorId": "868546064498688000",
+      "authorUsername": "kieraesque",
+      "roleId": "1414451390163718264",
+      "pingSent": false
+    }
+  },
+  "completed": {
+    "23112025": {
+      "id": "23112025",
+      "title": "PASKOMIKET 2025",
+      "details": "Awaiting enthusiasm check for PASKOMIKET 2025!!! Interest check below 😜",
+      "status": "cancelled",
+      "participants": [
+        {
+          "id": "868546064498688000",
+          "username": "kieraesque"
+        },
+        {
+          "id": "895836435503022110",
+          "username": "manfrok"
+        }
+      ],
+      "messageId": "1414326231842951178",
+      "channelId": "1414282638801502218",
+      "authorId": "868546064498688000",
+      "authorUsername": "kieraesque",
+      "roleId": "1414326227807764612",
+      "pingSent": false
+    },
+    "09092025": {
+      "id": "09092025",
+      "title": "new gala",
+      "details": "YAYAYAY new gala test",
+      "status": "cancelled",
+      "participants": [
+        {
+          "id": "868546064498688000",
+          "username": "kieraesque"
+        }
+      ],
+      "messageId": "1414316004351414283",
+      "channelId": "1414282638801502218",
+      "authorId": "868546064498688000",
+      "authorUsername": "kieraesque",
+      "roleId": "1414316002514305265",
+      "pingSent": false
     }
   }
 }
