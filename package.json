@@ -1,10 +1,29 @@
 {
+  "name": "gala-bot",
+  "version": "1.0.0",
+  "description": "A Discord bot to plan, manage, and join galas with ease!",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "clear": "node clear-commands.js",
+    "deploy-only": "node deploy-commands.js",
+    "deploy": "npm run clear && npm run deploy-only && npm start"
+  },
+  "keywords": [
+    "discord",
+    "bot",
+    "gala",
+    "event",
+    "scheduler"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
   "dependencies": {
     "discord.js": "^14.22.1",
     "dotenv": "^17.2.2",
     "octokit": "^5.0.3"
   },
   "engines": {
-    "node": ">=22.16.0 <23.0.0"
+    "node": ">=18.0.0"
   }
 }
