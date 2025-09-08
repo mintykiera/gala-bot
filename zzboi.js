@@ -10,6 +10,9 @@ const {
   SlashCommandBuilder,
   PermissionsBitField,
   MessageFlags,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
 } = require("discord.js");
 const dotenv = require("dotenv");
 const fs = require("fs").promises;
@@ -19,7 +22,7 @@ const { Octokit } = require("octokit");
 dotenv.config();
 
 const PING_CHANNEL_ID = "1312425724736704562";
-const BUTTON_COOLDOWN_SECONDS = 10;
+const BUTTON_COOLDOWN_SECONDS = 5; // Reduced for better user experience
 const DATA_FILE = path.join(__dirname, "galas.json");
 
 const client = new Client({
@@ -36,29 +39,17 @@ const completedGalas = new Map();
 const buttonCooldowns = new Map();
 
 const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
-const GITHUB_REPO = process.env.GITHUB_REPO; // e.g. "mintykiera/gala-bot"
+const GITHUB_REPO = process.env.GITHUB_REPO;
 const GITHUB_FILE_PATH = process.env.GITHUB_FILE_PATH || "galas.json";
 
 const commands = [
   new SlashCommandBuilder()
     .setName("plan")
-    .setDescription("Schedule a new gala event")
-    .addStringOption((option) =>
-      option
-        .setName("title")
-        .setDescription("Name of the gala")
-        .setRequired(true)
-    )
+    .setDescription("Schedule a new gala event using a pop-up form")
     .addStringOption((option) =>
       option
         .setName("date")
         .setDescription("When? Format: DDMMYYYY (e.g., 24082025)")
-        .setRequired(true)
-    )
-    .addStringOption((option) =>
-      option
-        .setName("details")
-        .setDescription("What's happening?")
         .setRequired(true)
     ),
 
@@ -243,10 +234,9 @@ async function saveGalas() {
       content: content,
       sha: currentSha,
     });
-
-    console.log("✅ Gala data saved to GitHub successfully.");
   } catch (err) {
     console.error("Error saving gala data to GitHub:", err);
+    throw err;
   }
 }
 
@@ -280,7 +270,11 @@ function createGalaEmbedAndButtons(gala) {
     .setColor(color)
     .setTitle(gala.title)
     .setDescription(gala.details)
-    .addFields({ name: "✅ Attendees", value: participantList, inline: false })
+    .addFields({
+      name: `✅ Attendees (${gala.participants.length})`,
+      value: participantList,
+      inline: false,
+    })
     .setFooter({
       text: `Gala ID: ${gala.id} | ${statusText} | Created by: ${gala.authorUsername}`,
     });
@@ -300,7 +294,8 @@ function createGalaEmbedAndButtons(gala) {
 
   return {
     embeds: [embed],
-    components: gala.status === "open" ? [buttons] : [],
+    components:
+      gala.status === "open" || gala.status === "closed" ? [buttons] : [],
   };
 }
 
@@ -312,8 +307,7 @@ function createHelpEmbed() {
     .addFields(
       {
         name: "📅 /plan",
-        value:
-          '`/plan title: "Summer Ball" date: 24082025 details: "Dress fancy!"`\n→ Schedule a new gala.',
+        value: "`/plan date: 24082025`\n→ Opens a form to schedule a new gala.",
         inline: false,
       },
       {
@@ -357,7 +351,6 @@ function createHelpEmbed() {
     )
     .setFooter({
       text: "Tip: Use the Join/Leave buttons under each gala post!",
-      iconURL: client.user.displayAvatarURL(),
     });
 }
 
@@ -411,7 +404,6 @@ async function dailySchedulerTick() {
             content: `<@&${gala.roleId}> The gala, **${gala.title}**, is happening today! Get ready! ✨`,
           });
           gala.pingSent = true;
-          galas.set(galaId, gala);
           await saveGalas();
         }
       } catch (error) {
@@ -419,353 +411,399 @@ async function dailySchedulerTick() {
       }
     }
 
-    if (galaDate < today) {
+    if (galaDate < today && gala.status !== "completed") {
       console.log(`✅ ${gala.title} ended. Archiving.`);
       gala.status = "completed";
       completedGalas.set(galaId, gala);
       galas.delete(galaId);
-      await saveGalas();
 
       try {
         const role = await guild.roles.fetch(gala.roleId);
         if (role) await role.delete(`Gala "${gala.title}" has ended.`);
+      } catch (error) {
+        console.error(
+          `Could not delete role for completed gala ${gala.id}:`,
+          error
+        );
+      }
+
+      try {
         const channel = await guild.channels.fetch(gala.channelId);
         const message = await channel.messages.fetch(gala.messageId);
         await message.edit(createGalaEmbedAndButtons(gala));
       } catch (error) {
         console.error(`Cleanup failed for ${gala.id}:`, error);
       }
+
+      await saveGalas();
     }
   }
 }
-
-client.once("clientReady", () => {
-  console.log(`🚀 Bot online as ${client.user.tag}`);
+// --- FIX: Correct event name and use client object from callback ---
+client.once("ready", (c) => {
+  console.log(`🚀 Bot online as ${c.user.tag}`);
   dailySchedulerTick();
   setInterval(dailySchedulerTick, 60000);
+});
+
+client.on("error", (err) => {
+  console.error("⚠️ Global Client Error:", err);
 });
 
 client.on("interactionCreate", async (interaction) => {
   if (!interaction.inGuild()) return;
 
-  if (interaction.isChatInputCommand()) {
-    const { commandName } = interaction;
+  try {
+    if (interaction.isChatInputCommand()) {
+      const { commandName } = interaction;
 
-    if (commandName === "help") {
-      // ✅ DEFER FIRST to prevent timeout
-      await interaction.deferReply({ ephemeral: true });
-      const helpEmbed = createHelpEmbed();
-      return interaction.editReply({ embeds: [helpEmbed] });
-    }
+      // --- FIX: /help is now public by default (removed deprecated 'ephemeral' property) ---
+      if (commandName === "help") {
+        await interaction.reply({ embeds: [createHelpEmbed()] });
+        return;
+      }
 
-    if (commandName === "past-galas") {
-      // ✅ DEFER FIRST to prevent timeout
-      await interaction.deferReply({ ephemeral: true });
-      const pastEmbed = createPastGalasEmbed();
-      return interaction.editReply({ embeds: [pastEmbed] });
-    }
+      if (commandName === "past-galas") {
+        await interaction.deferReply();
+        const pastEmbed = createPastGalasEmbed();
+        await interaction.editReply({ embeds: [pastEmbed] });
+        return;
+      }
 
-    if (commandName === "cancel-gala") {
+      if (commandName === "cancel-gala") {
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        const galaId = interaction.options.getString("gala-id");
+        if (!galas.has(galaId)) {
+          return interaction.editReply({
+            content: `❌ No active gala found with ID ${galaId}.`,
+          });
+        }
+
+        const gala = galas.get(galaId);
+        if (interaction.user.id !== gala.authorId) {
+          return interaction.editReply({
+            content: "❌ Only the creator can cancel this gala.",
+          });
+        }
+
+        gala.status = "cancelled";
+
+        try {
+          const role = await interaction.guild.roles.fetch(gala.roleId);
+          if (role) await role.delete("Gala cancelled by author.");
+        } catch (err) {
+          console.warn(
+            `Could not delete role for cancelled gala ${gala.id}:`,
+            err
+          );
+        }
+
+        try {
+          const channel = await client.channels.fetch(gala.channelId);
+          const message = await channel.messages.fetch(gala.messageId);
+          await message.edit(createGalaEmbedAndButtons(gala));
+        } catch (err) {
+          console.warn(
+            `Could not update message for cancelled gala ${gala.id}:`,
+            err
+          );
+        }
+
+        completedGalas.set(galaId, gala);
+        galas.delete(galaId);
+        await saveGalas();
+
+        return interaction.editReply({
+          content: `✅ Gala "${gala.title}" has been cancelled.`,
+        });
+      }
+
+      if (commandName === "plan") {
+        const date = interaction.options.getString("date");
+
+        if (!/^\d{8}$/.test(date)) {
+          return interaction.reply({
+            content: "❌ Invalid date. Use DDMMYYYY (e.g., 24082025).",
+            flags: MessageFlags.Ephemeral,
+          });
+        }
+
+        const galaDate = parseDate(date);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        if (galaDate < today) {
+          return interaction.reply({
+            content: "❌ Can't schedule in the past.",
+            flags: MessageFlags.Ephemeral,
+          });
+        }
+
+        if (galas.has(date) || completedGalas.has(date)) {
+          return interaction.reply({
+            content: `❌ A gala with ID ${date} already exists.`,
+            flags: MessageFlags.Ephemeral,
+          });
+        }
+
+        const modal = new ModalBuilder()
+          .setCustomId(`plan-gala-modal_${date}`)
+          .setTitle("Plan a New Gala");
+
+        const titleInput = new TextInputBuilder()
+          .setCustomId("gala-title")
+          .setLabel("Gala Title")
+          .setStyle(TextInputStyle.Short)
+          .setPlaceholder("e.g., Summer Ball 2025")
+          .setRequired(true);
+
+        const detailsInput = new TextInputBuilder()
+          .setCustomId("gala-details")
+          .setLabel("Details (Supports Markdown)")
+          .setStyle(TextInputStyle.Paragraph)
+          .setPlaceholder(
+            "e.g., Join us for a night of fun! Dress code: formal.\n- Live music\n- Free food"
+          )
+          .setRequired(true);
+
+        modal.addComponents(
+          new ActionRowBuilder().addComponents(titleInput),
+          new ActionRowBuilder().addComponents(detailsInput)
+        );
+
+        await interaction.showModal(modal);
+        return;
+      }
+
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
       const galaId = interaction.options.getString("gala-id");
       if (!galas.has(galaId)) {
-        return interaction.reply({
-          content: `No active gala found with ID ${galaId}.`,
-          flags: MessageFlags.Ephemeral,
+        return interaction.editReply({
+          content: `❌ No active gala found with ID ${galaId}.`,
         });
       }
-
       const gala = galas.get(galaId);
-      if (interaction.user.id !== gala.authorId) {
-        return interaction.reply({
-          content: "Only the creator can cancel this gala.",
-          flags: MessageFlags.Ephemeral,
+
+      const isAuthor = gala && interaction.user.id === gala.authorId;
+      const authorOnly = ["close-doors", "open-doors", "tweak"];
+      if (authorOnly.includes(commandName) && !isAuthor) {
+        return interaction.editReply({
+          content: "❌ Only the creator can do that.",
         });
       }
 
-      gala.status = "cancelled";
+      let updateMessage = "";
 
-      try {
-        const role = await interaction.guild.roles.fetch(gala.roleId);
-        if (role) await role.delete("Gala cancelled by author.");
-      } catch (err) {
-        console.warn(
-          `Could not delete role for cancelled gala ${gala.id}:`,
-          err
-        );
-      }
-
-      try {
-        const channel = await client.channels.fetch(gala.channelId);
-        const message = await channel.messages.fetch(gala.messageId);
-        const cancelledEmbed = new EmbedBuilder()
-          .setColor("#ED4245")
-          .setTitle("❌ " + gala.title)
-          .setDescription(gala.details)
-          .addFields({
-            name: "✅ Attendees",
-            value:
-              gala.participants.length > 0
-                ? gala.participants
-                    .map((p, i) => `${i + 1}.) <@${p.id}> (${p.username})`)
-                    .join("\n")
-                : "No one joined.",
-            inline: false,
-          })
-          .setFooter({
-            text: `Gala ID: ${gala.id} | Status: Cancelled | Cancelled by: ${interaction.user.username}`,
+      if (commandName === "tweak") {
+        const newTitle = interaction.options.getString("new-title");
+        const newDetails = interaction.options.getString("new-details");
+        if (!newTitle && !newDetails) {
+          return interaction.editReply({
+            content: "❌ Provide a new title or details to edit.",
           });
-
-        await message.edit({
-          embeds: [cancelledEmbed],
-          components: [],
+        }
+        if (newTitle) gala.title = newTitle.trim();
+        if (newDetails) gala.details = newDetails;
+        updateMessage = `✅ Tweaked "${gala.title}"!`;
+      } else if (commandName === "open-doors") {
+        if (gala.status === "open")
+          return interaction.editReply("✅ Sign-ups are already open.");
+        gala.status = "open";
+        updateMessage = `✅ Opened doors for "${gala.title}"!`;
+      } else if (commandName === "close-doors") {
+        if (gala.status === "closed")
+          return interaction.editReply("✅ Sign-ups are already closed.");
+        gala.status = "closed";
+        updateMessage = `✅ Closed doors for "${gala.title}"!`;
+      } else if (commandName === "peek") {
+        return interaction.editReply({
+          ...createGalaEmbedAndButtons(gala),
+          ephemeral: false, // This is okay for editReply, it just makes the deferred reply non-ephemeral
         });
-      } catch (err) {
-        console.warn(
-          `Could not update message for cancelled gala ${gala.id}:`,
-          err
-        );
-      }
-
-      completedGalas.set(galaId, gala);
-      galas.delete(galaId);
-      await saveGalas();
-
-      return interaction.reply({
-        content: `✅ Gala "${gala.title}" has been cancelled.`,
-        flags: MessageFlags.Ephemeral,
-      });
-    }
-
-    if (commandName === "plan") {
-      let title = interaction.options.getString("title");
-      const date = interaction.options.getString("date");
-      const details = interaction.options.getString("details");
-
-      if (!title || typeof title !== "string" || title.trim() === "") {
-        return interaction.reply({
-          content: "Gala title cannot be empty.",
-          flags: MessageFlags.Ephemeral,
-        });
-      }
-      title = title.trim();
-
-      if (!/^\d{8}$/.test(date)) {
-        return interaction.reply({
-          content: "Invalid date. Use DDMMYYYY (e.g., 24082025).",
-          flags: MessageFlags.Ephemeral,
+      } else if (commandName === "whats-on") {
+        if (galas.size === 0) {
+          return interaction.editReply("🎭 No galas scheduled right now.");
+        }
+        const list = Array.from(galas.values())
+          .map((g) => `**${g.title}** (ID: \`${g.id}\`) — ${g.status}`)
+          .join("\n");
+        return interaction.editReply({
+          embeds: [
+            new EmbedBuilder()
+              .setTitle("🎭 Upcoming Galas")
+              .setDescription(list)
+              .setColor("#5865F2"),
+          ],
         });
       }
 
-      const galaDate = parseDate(date);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      if (galaDate < today) {
-        return interaction.reply({
-          content: "Can't schedule in the past.",
-          flags: MessageFlags.Ephemeral,
-        });
-      }
-
-      if (galas.has(date)) {
-        return interaction.reply({
-          content: `A gala with ID ${date} already exists.`,
-          flags: MessageFlags.Ephemeral,
-        });
-      }
-
-      if (
-        !interaction.guild.members.me.permissions.has(
-          PermissionsBitField.Flags.ManageRoles
-        )
-      ) {
-        return interaction.reply({
-          content: "I need 'Manage Roles' permission to create a role!",
-          flags: MessageFlags.Ephemeral,
-        });
-      }
-
-      const roleName = `Gala: ${title.substring(0, 50)}`;
-      const galaRole = await interaction.guild.roles.create({
-        name: roleName,
-        mentionable: true,
-        reason: `Role for ${title}`,
-      });
-
-      const newGala = {
-        id: date,
-        title,
-        details,
-        status: "open",
-        participants: [],
-        messageId: null,
-        channelId: interaction.channelId,
-        authorId: interaction.user.id,
-        authorUsername: interaction.user.username,
-        roleId: galaRole.id,
-        pingSent: false,
-      };
-
-      // ✅ Save first to prevent duplicates
-      galas.set(date, newGala);
-      await saveGalas();
-
-      const messageComponents = createGalaEmbedAndButtons(newGala);
-      const message = await interaction.channel.send(messageComponents);
-      newGala.messageId = message.id;
-      galas.set(date, newGala);
-      await saveGalas();
-
-      return interaction.reply({
-        content: `🎉 Gala "${title}" scheduled for ${date}!`,
-        flags: MessageFlags.Ephemeral,
-      });
-    }
-
-    const galaId = interaction.options.getString("gala-id");
-    if (galaId && !galas.has(galaId)) {
-      return interaction.reply({
-        content: `No active gala found with ID ${galaId}.`,
-        flags: MessageFlags.Ephemeral,
-      });
-    }
-    const gala = galas.get(galaId);
-
-    const isAuthor = gala && interaction.user.id === gala.authorId;
-    const authorOnly = ["close-doors", "open-doors", "tweak", "cancel-gala"];
-    if (authorOnly.includes(commandName) && !isAuthor) {
-      return interaction.reply({
-        content: "Only the creator can do that.",
-        flags: MessageFlags.Ephemeral,
-      });
-    }
-
-    if (commandName === "tweak") {
-      const newTitle = interaction.options.getString("new-title");
-      const newDetails = interaction.options.getString("new-details");
-      if (!newTitle && !newDetails) {
-        return interaction.reply({
-          content: "Provide a new title or details to edit.",
-          flags: MessageFlags.Ephemeral,
-        });
-      }
-      if (newTitle) gala.title = newTitle.trim();
-      if (newDetails) gala.details = newDetails;
-    } else if (commandName === "open-doors") {
-      gala.status = "open";
-    } else if (commandName === "close-doors") {
-      gala.status = "closed";
-    } else if (commandName === "peek") {
-      // ✅ DEFER FIRST to prevent timeout
-      await interaction.deferReply({ ephemeral: true });
-      return interaction.editReply(createGalaEmbedAndButtons(gala));
-    } else if (commandName === "whats-on") {
-      // ✅ DEFER FIRST to prevent timeout
-      await interaction.deferReply();
-
-      if (galas.size === 0) {
-        return interaction.editReply("No galas scheduled right now.");
-      }
-      const list = Array.from(galas.values())
-        .map((g) => `**${g.title}** (ID: \`${g.id}\`) — ${g.status}`)
-        .join("\n");
-      return interaction.editReply({
-        embeds: [
-          new EmbedBuilder()
-            .setTitle("🎭 Upcoming Galas")
-            .setDescription(list)
-            .setColor("#5865F2"),
-        ],
-      });
-    }
-
-    if (gala && ["tweak", "open-doors", "close-doors"].includes(commandName)) {
       const channel = await client.channels.fetch(gala.channelId);
       const message = await channel.messages.fetch(gala.messageId);
       await message.edit(createGalaEmbedAndButtons(gala));
       galas.set(galaId, gala);
       await saveGalas();
-      await interaction.reply({
-        content: `✅ Updated "${gala.title}"`,
-        flags: MessageFlags.Ephemeral,
-      });
-    }
-  }
-
-  if (interaction.isButton()) {
-    const [action, galaId] = interaction.customId.split("_");
-    const gala = galas.get(galaId);
-
-    if (!gala || gala.status !== "open") {
-      return interaction.reply({
-        content: "Sign-ups are closed for this gala.",
-        flags: MessageFlags.Ephemeral,
-      });
+      return interaction.editReply({ content: updateMessage });
     }
 
-    const cooldownKey = `${interaction.user.id}-${galaId}`;
-    const now = Date.now();
-    const cooldown = buttonCooldowns.get(cooldownKey);
+    if (interaction.isModalSubmit()) {
+      const [customId, date] = interaction.customId.split("_");
 
-    if (cooldown && now - cooldown < BUTTON_COOLDOWN_SECONDS * 1000) {
-      const left = (
-        (cooldown + BUTTON_COOLDOWN_SECONDS * 1000 - now) /
-        1000
-      ).toFixed(1);
-      return interaction.reply({
-        content: `⏳ Wait ${left}s before trying again.`,
-        flags: MessageFlags.Ephemeral,
-      });
+      if (customId === "plan-gala-modal") {
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+        const title = interaction.fields.getTextInputValue("gala-title");
+        const details = interaction.fields.getTextInputValue("gala-details");
+
+        if (
+          !interaction.guild.members.me.permissions.has(
+            PermissionsBitField.Flags.ManageRoles
+          )
+        ) {
+          return interaction.editReply({
+            content:
+              "❌ I need 'Manage Roles' permission to create a role for the gala!",
+          });
+        }
+
+        const roleName = `Gala: ${title.substring(0, 50)}`;
+        const galaRole = await interaction.guild.roles.create({
+          name: roleName,
+          mentionable: true,
+          reason: `Role for gala: ${title}`,
+        });
+
+        const newGala = {
+          id: date,
+          title,
+          details,
+          status: "open",
+          participants: [],
+          messageId: null,
+          channelId: interaction.channelId,
+          authorId: interaction.user.id,
+          authorUsername: interaction.user.username,
+          roleId: galaRole.id,
+          pingSent: false,
+        };
+
+        const messageComponents = createGalaEmbedAndButtons(newGala);
+        const message = await interaction.channel.send(messageComponents);
+
+        newGala.messageId = message.id;
+        galas.set(date, newGala);
+        await saveGalas();
+
+        return interaction.editReply({
+          content: `🎉 Gala "${title}" scheduled for ${date}! The announcement has been posted.`,
+        });
+      }
     }
-    buttonCooldowns.set(cooldownKey, now);
 
-    const user = interaction.user;
-    const member = interaction.member;
-    const isJoined = gala.participants.some((p) => p.id === user.id);
-    const role = await interaction.guild.roles.fetch(gala.roleId);
-    if (!role) {
-      return interaction.reply({
-        content: "Role missing. Contact an admin.",
-        flags: MessageFlags.Ephemeral,
-      });
-    }
+    if (interaction.isButton()) {
+      await interaction.deferUpdate();
 
-    if (action === "join-gala") {
-      if (isJoined) {
-        return interaction.reply({
-          content: "You're already signed up!",
+      const [action, galaId] = interaction.customId.split("_");
+      const gala = galas.get(galaId);
+
+      if (!gala) {
+        return interaction.followUp({
+          content: "❌ This gala seems to have been removed.",
           flags: MessageFlags.Ephemeral,
         });
       }
-      gala.participants.push({ id: user.id, username: user.username });
-      await member.roles.add(role);
-    } else if (action === "leave-gala") {
-      if (!isJoined) {
-        return interaction.reply({
-          content: "You haven't joined yet.",
+
+      if (gala.status !== "open") {
+        return interaction.followUp({
+          content: "🔒 Sign-ups are currently closed for this gala.",
           flags: MessageFlags.Ephemeral,
         });
       }
-      gala.participants = gala.participants.filter((p) => p.id !== user.id);
-      await member.roles.remove(role);
+
+      const cooldownKey = `${interaction.user.id}-${galaId}`;
+      const now = Date.now();
+      const cooldown = buttonCooldowns.get(cooldownKey);
+
+      if (cooldown && now - cooldown < BUTTON_COOLDOWN_SECONDS * 1000) {
+        const left = (
+          (cooldown + BUTTON_COOLDOWN_SECONDS * 1000 - now) /
+          1000
+        ).toFixed(1);
+        return interaction.followUp({
+          content: `⏳ Please wait ${left}s before trying again.`,
+          flags: MessageFlags.Ephemeral,
+        });
+      }
+      buttonCooldowns.set(cooldownKey, now);
+
+      const user = interaction.user;
+      const member = interaction.member;
+      const isJoined = gala.participants.some((p) => p.id === user.id);
+
+      const role = await interaction.guild.roles
+        .fetch(gala.roleId)
+        .catch(() => null);
+      if (!role) {
+        return interaction.followUp({
+          content:
+            "⚠️ The role for this gala is missing. Please contact an admin.",
+          flags: MessageFlags.Ephemeral,
+        });
+      }
+
+      if (action === "join-gala") {
+        if (isJoined) {
+          return interaction.followUp({
+            content: "✅ You're already signed up for this gala!",
+            flags: MessageFlags.Ephemeral,
+          });
+        }
+        gala.participants.push({ id: user.id, username: user.username });
+        await member.roles.add(role);
+      } else if (action === "leave-gala") {
+        if (!isJoined) {
+          return interaction.followUp({
+            content: "⚠️ You haven't joined this gala yet.",
+            flags: MessageFlags.Ephemeral,
+          });
+        }
+        gala.participants = gala.participants.filter((p) => p.id !== user.id);
+        await member.roles.remove(role);
+      }
+
+      galas.set(galaId, gala);
+
+      // --- FIX: Update the message FIRST for instant feedback, then save. ---
+      await interaction.message.edit(createGalaEmbedAndButtons(gala));
+      await saveGalas();
     }
-
-    // ✅ FIXED: Use update() to avoid double-reply
-    await interaction.update({
-      ...createGalaEmbedAndButtons(gala),
-      content: `✅ You've ${action === "join-gala" ? "joined" : "left"} "${
-        gala.title
-      }"!`,
-      flags: MessageFlags.Ephemeral,
-    });
-
-    galas.set(galaId, gala);
-    await saveGalas();
+    // --- FIX: Completely rebuilt error handler for stability ---
+  } catch (err) {
+    console.error("⚠️ Interaction Error:", err);
+    try {
+      if (interaction.deferred || interaction.replied) {
+        await interaction.followUp({
+          content: "❌ An error occurred while executing this command!",
+          flags: MessageFlags.Ephemeral,
+        });
+      } else {
+        await interaction.reply({
+          content: "❌ An error occurred while executing this command!",
+          flags: MessageFlags.Ephemeral,
+        });
+      }
+    } catch (e) {
+      console.error("CRITICAL: Failed to send error message to the user.", e);
+    }
   }
 });
 
 async function initialize() {
-  await loadGalas();
-  await deployCommands();
+  try {
+    await loadGalas();
+    await deployCommands();
+  } catch (err) {
+    console.error("❌ Initialization error:", err);
+  }
 }
 
 initialize().catch(console.error);
