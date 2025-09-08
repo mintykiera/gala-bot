@@ -1,10 +1,11 @@
 {
-  "active": {
+  "active": {},
+  "completed": {
     "23112025": {
       "id": "23112025",
       "title": "PASKOMIKET 2025",
       "details": "Awaiting enthusiasm check for PASKOMIKET 2025!!! Interest check below 😜",
-      "status": "open",
+      "status": "cancelled",
       "participants": [
         {
           "id": "868546064498688000",
@@ -21,9 +22,7 @@
       "authorUsername": "kieraesque",
       "roleId": "1414326227807764612",
       "pingSent": false
-    }
-  },
-  "completed": {
+    },
     "09092025": {
       "id": "09092025",
       "title": "new gala",
