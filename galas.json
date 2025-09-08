@@ -5,7 +5,12 @@
       "title": "Chainsaw Man the Movie: Reze Arc Gala",
       "details": "When: \n- September 28, 2025 (Sunday)\nWhere: \n- SM Megamall: ₱400 per ticket\n- Bonifacio High Street (BGC): ₱370 per ticket\nDinner: \n- Sukiya (SM Megamall) \n- Food District (BGC)",
       "status": "open",
-      "participants": [],
+      "participants": [
+        {
+          "id": "738971284318322789",
+          "username": "zzboiii"
+        }
+      ],
       "messageId": "1414452779702816939",
       "channelId": "1414301984328257546",
       "authorId": "738971284318322789",
