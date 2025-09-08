@@ -4,6 +4,7 @@ const {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
+  MessageFlags,
 } = require("discord.js");
 
 function createGalaEmbedAndButtons(gala) {
@@ -35,10 +36,30 @@ function createGalaEmbedAndButtons(gala) {
       name: `✅ Attendees (${gala.participants.length})`,
       value: participantList,
       inline: false,
-    })
-    .setFooter({
-      text: `Gala ID: ${gala.id} | ${statusText} | Created by: ${gala.authorUsername}`,
     });
+
+  // Show auto-close date if set
+  if (gala.autoCloseDate) {
+    embed.addFields({
+      name: "⏳ Auto-Close",
+      value: `Sign-ups will close automatically on \`${gala.autoCloseDate}\`.`,
+      inline: false,
+    });
+  }
+
+  // Show co-hosts if any
+  if (gala.coHosts && gala.coHosts.length > 0) {
+    const coHostMentions = gala.coHosts.map((id) => `<@${id}>`).join(", ");
+    embed.addFields({
+      name: "👥 Co-Hosts",
+      value: coHostMentions,
+      inline: false,
+    });
+  }
+
+  embed.setFooter({
+    text: `Gala ID: ${gala.id} | ${statusText} | Created by: ${gala.authorUsername}`,
+  });
 
   const showButtons = ["open", "closed"].includes(gala.status);
   if (showButtons) {
@@ -80,7 +101,7 @@ function createHelpEmbed() {
       {
         name: "✨ /tweak",
         value:
-          '`/tweak gala-id: 24082025 new-title: "Winter Ball"`\n→ Edit your gala\'s name or details.',
+          '`/tweak gala-id: 24082025 new-title: "Winter Ball" auto-close-date: 20082025`\n→ Edit your gala\'s name, details, or auto-close date.',
         inline: false,
       },
       {
@@ -96,7 +117,7 @@ function createHelpEmbed() {
       {
         name: "❌ /cancel-gala",
         value:
-          "`/cancel-gala gala-id: 24082025`\n→ Cancel your gala (author only).",
+          "`/cancel-gala gala-id: 24082025`\n→ Cancel your gala (author or co-host).",
         inline: false,
       },
       {
@@ -113,6 +134,18 @@ function createHelpEmbed() {
       {
         name: "📜 /past-galas",
         value: "`/past-galas`\n→ See all completed/cancelled galas.",
+        inline: false,
+      },
+      {
+        name: "👥 /give-access",
+        value:
+          "`/give-access gala-id: 24082025 user: @someone`\n→ Grant co-host permissions.",
+        inline: false,
+      },
+      {
+        name: "🚫 /remove-access",
+        value:
+          "`/remove-access gala-id: 24082025 user: @someone`\n→ Remove co-host permissions.",
         inline: false,
       }
     )
@@ -153,7 +186,7 @@ function createPastGalasEmbed() {
       text:
         completedGalas.size > 25
           ? "Oldest galas may be trimmed. Data is still saved!"
-          : "",
+          : null, // ← FIXED: null instead of ""
     });
 }
 

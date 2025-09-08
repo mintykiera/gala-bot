@@ -1,9 +1,10 @@
 // src/commands/whatsOn.js
 const { EmbedBuilder } = require("discord.js");
 const { galas } = require("../state");
+const { MessageFlags } = require("discord.js");
 
 async function execute(interaction) {
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   if (galas.size === 0) {
     return interaction.editReply("🎭 No galas scheduled right now.");

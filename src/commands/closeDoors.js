@@ -4,8 +4,7 @@ const { saveGalas } = require("../githubManager");
 const { createGalaEmbedAndButtons } = require("../utils/embeds");
 
 async function execute(interaction) {
-  await interaction.deferReply({ ephemeral: true });
-
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const galaId = interaction.options.getString("gala-id");
   if (!galas.has(galaId)) {
     return interaction.editReply({
@@ -14,9 +13,13 @@ async function execute(interaction) {
   }
 
   const gala = galas.get(galaId);
-  if (interaction.user.id !== gala.authorId) {
+  const isAuthor = interaction.user.id === gala.authorId;
+  const isCoHost = gala.coHosts?.includes(interaction.user.id) || false;
+  const hasPermission = isAuthor || isCoHost;
+
+  if (!hasPermission) {
     return interaction.editReply({
-      content: "❌ Only the creator can do that.",
+      content: "❌ Only the creator or co-hosts can do that.",
     });
   }
 

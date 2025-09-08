@@ -1,9 +1,6 @@
 // deploy-commands.js
-const { REST, Routes } = require("discord.js");
+const { REST, Routes, SlashCommandBuilder } = require("discord.js");
 const { CLIENT_ID, GUILD_ID, DISCORD_TOKEN } = require("./src/config");
-
-// Import command builders from bot.js or re-declare
-const { SlashCommandBuilder } = require("discord.js");
 
 const commands = [
   new SlashCommandBuilder()
@@ -77,6 +74,22 @@ const commands = [
         .setDescription("Gala date (ID)")
         .setRequired(true)
     ),
+
+  new SlashCommandBuilder() // ← NEW COMMAND
+    .setName("give-access")
+    .setDescription("Grant co-host access to another user")
+    .addStringOption((option) =>
+      option
+        .setName("gala-id")
+        .setDescription("Gala date (ID)")
+        .setRequired(true)
+    )
+    .addUserOption((option) =>
+      option
+        .setName("user")
+        .setDescription("User to grant access to")
+        .setRequired(true)
+    ),
 ].map((command) => command.toJSON());
 
 const rest = new REST({ version: "10" }).setToken(DISCORD_TOKEN);
@@ -84,11 +97,9 @@ const rest = new REST({ version: "10" }).setToken(DISCORD_TOKEN);
 (async () => {
   try {
     console.log("🔄 Deploying commands...");
-
     await rest.put(Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID), {
       body: commands,
     });
-
     console.log("✅ Successfully deployed commands.");
   } catch (error) {
     console.error("❌ Error deploying commands:", error);

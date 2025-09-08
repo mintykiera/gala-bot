@@ -1,6 +1,6 @@
 // src/config.js
 const dotenv = require("dotenv");
-dotenv.config();
+dotenv.config({ quiet: true }); // Suppress dotenv logs
 
 const PING_CHANNEL_ID = process.env.PING_CHANNEL_ID || "1312425724736704562";
 const BUTTON_COOLDOWN_SECONDS = 5;
@@ -8,7 +8,6 @@ const GITHUB_REPO = process.env.GITHUB_REPO;
 const GITHUB_FILE_PATH = process.env.GITHUB_FILE_PATH || "galas.json";
 const DATA_FILE = require("path").join(__dirname, "..", "galas.json");
 
-// Validate critical env vars
 const requiredEnvVars = [
   "DISCORD_TOKEN",
   "CLIENT_ID",

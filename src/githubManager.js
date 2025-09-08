@@ -29,6 +29,8 @@ async function loadGalas() {
           typeof gala.id === "string"
         ) {
           if (!Array.isArray(gala.participants)) gala.participants = [];
+          if (!Array.isArray(gala.coHosts)) gala.coHosts = [];
+          if (!gala.autoCloseDate) gala.autoCloseDate = null; // ← ADDED
           if (
             !["open", "closed", "completed", "cancelled"].includes(gala.status)
           ) {
@@ -49,6 +51,8 @@ async function loadGalas() {
           typeof gala.id === "string"
         ) {
           if (!Array.isArray(gala.participants)) gala.participants = [];
+          if (!Array.isArray(gala.coHosts)) gala.coHosts = [];
+          if (!gala.autoCloseDate) gala.autoCloseDate = null; // ← ADDED
           if (!["completed", "cancelled"].includes(gala.status)) {
             gala.status = "completed";
           }

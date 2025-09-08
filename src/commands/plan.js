@@ -5,6 +5,7 @@ const {
   TextInputStyle,
   ActionRowBuilder,
   PermissionsBitField,
+  MessageFlags,
 } = require("discord.js");
 const { galas } = require("../state");
 const { saveGalas } = require("../githubManager");
@@ -16,7 +17,7 @@ async function execute(interaction) {
   if (!/^\d{8}$/.test(date)) {
     return interaction.reply({
       content: "❌ Invalid date. Use DDMMYYYY (e.g., 24082025).",
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
 
@@ -26,14 +27,14 @@ async function execute(interaction) {
   if (isNaN(galaDate.getTime()) || galaDate < today) {
     return interaction.reply({
       content: "❌ Can't schedule in the past or invalid date.",
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
 
   if (galas.has(date) || require("../state").completedGalas.has(date)) {
     return interaction.reply({
       content: `❌ A gala with ID \`${date}\` already exists.`,
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
 
@@ -59,9 +60,18 @@ async function execute(interaction) {
     .setRequired(true)
     .setMaxLength(2000);
 
+  const autoCloseInput = new TextInputBuilder()
+    .setCustomId("auto-close-date")
+    .setLabel("Auto-Close Sign-ups On (Optional)")
+    .setStyle(TextInputStyle.Short)
+    .setPlaceholder("DDMMYYYY (e.g., 20082025)")
+    .setRequired(false)
+    .setMaxLength(8);
+
   modal.addComponents(
     new ActionRowBuilder().addComponents(titleInput),
-    new ActionRowBuilder().addComponents(detailsInput)
+    new ActionRowBuilder().addComponents(detailsInput),
+    new ActionRowBuilder().addComponents(autoCloseInput)
   );
 
   await interaction.showModal(modal);

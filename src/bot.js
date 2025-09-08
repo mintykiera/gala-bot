@@ -5,13 +5,13 @@ const {
   REST,
   Routes,
   SlashCommandBuilder,
+  MessageFlags,
 } = require("discord.js");
 const { DISCORD_TOKEN, CLIENT_ID, GUILD_ID } = require("./config");
 const { loadGalas } = require("./githubManager");
 const { handleInteraction } = require("./events/interactionCreate");
 const { handleClientReady } = require("./events/clientReady");
 
-// --- COMMANDS DEFINITION ---
 const commands = [
   new SlashCommandBuilder()
     .setName("plan")
@@ -84,6 +84,38 @@ const commands = [
         .setDescription("Gala date (ID)")
         .setRequired(true)
     ),
+
+  new SlashCommandBuilder()
+    .setName("give-access")
+    .setDescription("Grant co-host access to another user")
+    .addStringOption((option) =>
+      option
+        .setName("gala-id")
+        .setDescription("Gala date (ID)")
+        .setRequired(true)
+    )
+    .addUserOption((option) =>
+      option
+        .setName("user")
+        .setDescription("User to grant access to")
+        .setRequired(true)
+    ),
+
+  new SlashCommandBuilder()
+    .setName("remove-access")
+    .setDescription("Remove co-host access from a user")
+    .addStringOption((option) =>
+      option
+        .setName("gala-id")
+        .setDescription("Gala date (ID)")
+        .setRequired(true)
+    )
+    .addUserOption((option) =>
+      option
+        .setName("user")
+        .setDescription("User to remove access from")
+        .setRequired(true)
+    ),
 ].map((command) => command.toJSON());
 
 const rest = new REST({ version: "10" }).setToken(DISCORD_TOKEN);
@@ -100,7 +132,6 @@ async function deployCommands() {
   }
 }
 
-// --- INIT CLIENT ---
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -110,13 +141,12 @@ const client = new Client({
   ],
 });
 
-client.once("ready", () => handleClientReady(client));
+client.once("clientReady", () => handleClientReady(client)); // ← FIXED
 client.on("interactionCreate", (interaction) =>
   handleInteraction(interaction, client)
 );
 client.on("error", (err) => console.error("⚠️ Global Client Error:", err));
 
-// --- INIT ---
 async function initialize() {
   try {
     console.log("🔧 Initializing bot...");

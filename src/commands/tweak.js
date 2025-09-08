@@ -1,56 +1,78 @@
 // src/commands/tweak.js
+const {
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
+  ActionRowBuilder,
+  MessageFlags,
+} = require("discord.js");
 const { galas } = require("../state");
-const { saveGalas } = require("../githubManager");
-const { createGalaEmbedAndButtons } = require("../utils/embeds");
 
 async function execute(interaction) {
-  await interaction.deferReply({ ephemeral: true });
-
   const galaId = interaction.options.getString("gala-id");
+
   if (!galas.has(galaId)) {
-    return interaction.editReply({
+    return interaction.reply({
       content: `❌ No active gala found with ID \`${galaId}\`.`,
+      flags: MessageFlags.Ephemeral,
     });
   }
 
   const gala = galas.get(galaId);
-  if (interaction.user.id !== gala.authorId) {
-    return interaction.editReply({
-      content: "❌ Only the creator can do that.",
+  const isAuthor = interaction.user.id === gala.authorId;
+  const isCoHost = gala.coHosts?.includes(interaction.user.id) || false;
+  const hasPermission = isAuthor || isCoHost;
+
+  if (!hasPermission) {
+    return interaction.reply({
+      content: "❌ Only the creator or co-hosts can do that.",
+      flags: MessageFlags.Ephemeral,
     });
   }
 
-  const newTitle = interaction.options.getString("new-title");
-  const newDetails = interaction.options.getString("new-details");
+  // Create modal with current values as placeholders
+  const modal = new ModalBuilder()
+    .setCustomId(`tweak-gala-modal_${galaId}`)
+    .setTitle(
+      `Tweak: ${gala.title.substring(0, 20)}${
+        gala.title.length > 20 ? "..." : ""
+      }`
+    );
 
-  if (!newTitle && !newDetails) {
-    return interaction.editReply({
-      content: "❌ Provide a new title or details to edit.",
-    });
-  }
+  const titleInput = new TextInputBuilder()
+    .setCustomId("new-title")
+    .setLabel("Gala Title")
+    .setStyle(TextInputStyle.Short)
+    .setPlaceholder(gala.title)
+    .setValue(gala.title)
+    .setRequired(true)
+    .setMaxLength(100);
 
-  if (newTitle) gala.title = newTitle.trim();
-  if (newDetails !== null) gala.details = newDetails;
+  const detailsInput = new TextInputBuilder()
+    .setCustomId("new-details")
+    .setLabel("Details (Markdown OK)")
+    .setStyle(TextInputStyle.Paragraph)
+    .setPlaceholder(gala.details || "No description set")
+    .setValue(gala.details || "")
+    .setRequired(true)
+    .setMaxLength(2000);
 
-  try {
-    const channel = await interaction.client.channels.fetch(gala.channelId);
-    if (!channel || !channel.isTextBased()) {
-      throw new Error("Channel not found or not text-based for update");
-    }
-    const message = await channel.messages.fetch(gala.messageId);
-    await message.edit(createGalaEmbedAndButtons(gala));
-    galas.set(galaId, gala);
-    await saveGalas();
-    return interaction.editReply({
-      content: `✅ Tweaked "**${gala.title}**"!`,
-    });
-  } catch (err) {
-    console.error(`Error updating message for gala ${galaId}:`, err);
-    return interaction.editReply({
-      content:
-        "⚠️ An error occurred while updating the gala post. Please try again.",
-    });
-  }
+  const autoCloseInput = new TextInputBuilder()
+    .setCustomId("auto-close-date")
+    .setLabel("Auto-Close Date (Optional)")
+    .setStyle(TextInputStyle.Short)
+    .setPlaceholder(gala.autoCloseDate || "DDMMYYYY (e.g., 20082025)")
+    .setValue(gala.autoCloseDate || "")
+    .setRequired(false)
+    .setMaxLength(8);
+
+  modal.addComponents(
+    new ActionRowBuilder().addComponents(titleInput),
+    new ActionRowBuilder().addComponents(detailsInput),
+    new ActionRowBuilder().addComponents(autoCloseInput)
+  );
+
+  await interaction.showModal(modal);
 }
 
 module.exports = { execute };

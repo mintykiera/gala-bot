@@ -7,9 +7,9 @@ const {
   createPastGalasEmbed,
 } = require("../utils/embeds");
 const { parseDate } = require("../utils/dateParser");
-const { BUTTON_COOLDOWN_SECONDS } = require("../config");
+const { BUTTON_COOLDOWN_SECONDS, GUILD_ID } = require("../config");
+const { MessageFlags } = require("discord.js");
 
-// Import command handlers
 const commandHandlers = {
   plan: require("../commands/plan"),
   tweak: require("../commands/tweak"),
@@ -20,6 +20,8 @@ const commandHandlers = {
   help: require("../commands/help"),
   "past-galas": require("../commands/pastGalas"),
   "cancel-gala": require("../commands/cancelGala"),
+  "give-access": require("../commands/giveAccess"),
+  "remove-access": require("../commands/removeAccess"),
 };
 
 async function handleInteraction(interaction, client) {
@@ -33,7 +35,7 @@ async function handleInteraction(interaction, client) {
       if (!handler) {
         return interaction.reply({
           content: "❌ Unknown command.",
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       }
 
@@ -42,17 +44,18 @@ async function handleInteraction(interaction, client) {
 
     if (interaction.isModalSubmit()) {
       const [customId, date] = interaction.customId.split("_");
+
+      // Handle plan modal
       if (customId === "plan-gala-modal") {
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         const title = interaction.fields.getTextInputValue("gala-title");
         const details = interaction.fields.getTextInputValue("gala-details");
+        const autoCloseDateString = interaction.fields
+          .getTextInputValue("auto-close-date")
+          .trim();
 
-        if (
-          !interaction.guild.members.me.permissions.has(
-            PermissionsBitField.Flags.ManageRoles
-          )
-        ) {
+        if (!interaction.guild.members.me.permissions.has("ManageRoles")) {
           return interaction.editReply({
             content:
               "❌ I need the 'Manage Roles' permission to create a role for the gala!",
@@ -74,12 +77,42 @@ async function handleInteraction(interaction, client) {
           });
         }
 
+        let autoCloseDate = null;
+        if (autoCloseDateString) {
+          if (!/^\d{8}$/.test(autoCloseDateString)) {
+            return interaction.editReply({
+              content: "❌ Invalid auto-close date. Use DDMMYYYY format.",
+            });
+          }
+
+          const parsedDate = parseDate(autoCloseDateString);
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+
+          if (isNaN(parsedDate.getTime()) || parsedDate < today) {
+            return interaction.editReply({
+              content: "❌ Auto-close date can't be in the past or invalid.",
+            });
+          }
+
+          const galaEventDate = parseDate(date);
+          if (parsedDate >= galaEventDate) {
+            return interaction.editReply({
+              content: "❌ Auto-close date must be BEFORE the gala date.",
+            });
+          }
+
+          autoCloseDate = autoCloseDateString;
+        }
+
         const newGala = {
           id: date,
           title,
           details,
           status: "open",
           participants: [],
+          coHosts: [],
+          autoCloseDate: autoCloseDate,
           messageId: null,
           channelId: interaction.channelId,
           authorId: interaction.user.id,
@@ -112,6 +145,93 @@ async function handleInteraction(interaction, client) {
           content: `🎉 Gala "**${title}**" scheduled for \`${date}\`! The announcement has been posted.`,
         });
       }
+
+      // ✅ HANDLE TWEAK MODAL ←←← NEW CODE HERE
+      if (customId === "tweak-gala-modal") {
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+        const galaId = date;
+        if (!galas.has(galaId)) {
+          return interaction.editReply({
+            content: `❌ No active gala found with ID \`${galaId}\`.`,
+          });
+        }
+
+        const gala = galas.get(galaId);
+        const isAuthor = interaction.user.id === gala.authorId;
+        const isCoHost = gala.coHosts?.includes(interaction.user.id) || false;
+        const hasPermission = isAuthor || isCoHost;
+
+        if (!hasPermission) {
+          return interaction.editReply({
+            content: "❌ Only the creator or co-hosts can do that.",
+          });
+        }
+
+        const newTitle = interaction.fields
+          .getTextInputValue("new-title")
+          .trim();
+        const newDetails = interaction.fields.getTextInputValue("new-details");
+        const autoCloseDateString = interaction.fields
+          .getTextInputValue("auto-close-date")
+          .trim();
+
+        if (!newTitle) {
+          return interaction.editReply({
+            content: "❌ Title cannot be empty.",
+          });
+        }
+
+        if (autoCloseDateString) {
+          if (!/^\d{8}$/.test(autoCloseDateString)) {
+            return interaction.editReply({
+              content: "❌ Invalid date format. Use DDMMYYYY (e.g., 20082025).",
+            });
+          }
+
+          const parsedDate = parseDate(autoCloseDateString);
+          const galaEventDate = parseDate(gala.id);
+
+          if (isNaN(parsedDate.getTime())) {
+            return interaction.editReply({
+              content: "❌ Invalid date. Please check the format.",
+            });
+          }
+
+          if (parsedDate >= galaEventDate) {
+            return interaction.editReply({
+              content: "❌ Auto-close date must be BEFORE the gala date.",
+            });
+          }
+        }
+
+        // Apply changes
+        gala.title = newTitle;
+        gala.details = newDetails;
+        gala.autoCloseDate = autoCloseDateString || null;
+
+        try {
+          const channel = await client.channels.fetch(gala.channelId);
+          if (!channel || !channel.isTextBased()) {
+            throw new Error("Channel not found");
+          }
+
+          const message = await channel.messages.fetch(gala.messageId);
+          await message.edit(createGalaEmbedAndButtons(gala));
+
+          galas.set(galaId, gala);
+          await saveGalas();
+
+          return interaction.editReply({
+            content: `✅ Successfully updated "**${gala.title}**"!`,
+          });
+        } catch (err) {
+          console.error(`Failed to update gala ${galaId}:`, err);
+          return interaction.editReply({
+            content: "⚠️ Failed to update the gala. Please try again.",
+          });
+        }
+      }
     }
 
     if (interaction.isButton()) {
@@ -123,14 +243,14 @@ async function handleInteraction(interaction, client) {
       if (!gala) {
         return interaction.followUp({
           content: "❌ This gala seems to have been removed.",
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       }
 
       if (gala.status !== "open") {
         return interaction.followUp({
           content: "🔒 Sign-ups are currently closed for this gala.",
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       }
 
@@ -145,7 +265,7 @@ async function handleInteraction(interaction, client) {
         ).toFixed(1);
         return interaction.followUp({
           content: `⏳ Please wait ${left}s before trying again.`,
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       }
       buttonCooldowns.set(cooldownKey, now);
@@ -161,7 +281,7 @@ async function handleInteraction(interaction, client) {
         return interaction.followUp({
           content:
             "⚠️ The role for this gala is missing. Please contact an admin.",
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       }
 
@@ -170,7 +290,7 @@ async function handleInteraction(interaction, client) {
         if (isJoined) {
           return interaction.followUp({
             content: "✅ You're already signed up for this gala!",
-            ephemeral: true,
+            flags: MessageFlags.Ephemeral,
           });
         }
         gala.participants.push({ id: user.id, username: user.username });
@@ -181,7 +301,7 @@ async function handleInteraction(interaction, client) {
           return interaction.followUp({
             content:
               "⚠️ Failed to assign the gala role. Please try again or contact an admin.",
-            ephemeral: true,
+            flags: MessageFlags.Ephemeral,
           });
         }
         needsSave = true;
@@ -189,7 +309,7 @@ async function handleInteraction(interaction, client) {
         if (!isJoined) {
           return interaction.followUp({
             content: "⚠️ You haven't joined this gala yet.",
-            ephemeral: true,
+            flags: MessageFlags.Ephemeral,
           });
         }
         gala.participants = gala.participants.filter((p) => p.id !== user.id);
@@ -202,7 +322,7 @@ async function handleInteraction(interaction, client) {
           return interaction.followUp({
             content:
               "⚠️ Failed to remove the gala role. Please try again or contact an admin.",
-            ephemeral: true,
+            flags: MessageFlags.Ephemeral,
           });
         }
         needsSave = true;
@@ -227,9 +347,15 @@ async function handleInteraction(interaction, client) {
 
     try {
       if (!hasResponded) {
-        await interaction.reply({ content: errorMessage, ephemeral: true });
+        await interaction.reply({
+          content: errorMessage,
+          flags: MessageFlags.Ephemeral,
+        });
       } else {
-        await interaction.followUp({ content: errorMessage, ephemeral: true });
+        await interaction.followUp({
+          content: errorMessage,
+          flags: MessageFlags.Ephemeral,
+        });
       }
     } catch (responseErr) {
       console.error(
