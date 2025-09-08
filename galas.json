@@ -1,5 +1,18 @@
 {
   "active": {
+    "25122025": {
+      "id": "25122025",
+      "title": "CHRISTMAS GALA",
+      "details": "Joke this is just a test",
+      "status": "open",
+      "participants": [],
+      "messageId": "1414560951184785540",
+      "channelId": "1414282638801502218",
+      "authorId": "868546064498688000",
+      "authorUsername": "kieraesque",
+      "roleId": "1414560949485961240",
+      "pingSent": false
+    },
     "28092025": {
       "id": "28092025",
       "title": "Chainsaw Man the Movie: Reze Arc Gala",
