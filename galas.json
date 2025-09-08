@@ -5,12 +5,7 @@
       "title": "temp",
       "details": "temp gala for test",
       "status": "open",
-      "participants": [
-        {
-          "id": "868546064498688000",
-          "username": "kieraesque"
-        }
-      ],
+      "participants": [],
       "messageId": "1414451394450165800",
       "channelId": "1414282638801502218",
       "authorId": "868546064498688000",
