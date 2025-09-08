@@ -5,12 +5,7 @@
       "title": "DATE",
       "details": "TEST TEST",
       "status": "open",
-      "participants": [
-        {
-          "id": "868546064498688000",
-          "username": "kieraesque"
-        }
-      ],
+      "participants": [],
       "messageId": "1414486240916668509",
       "channelId": "1414282638801502218",
       "authorId": "868546064498688000",
