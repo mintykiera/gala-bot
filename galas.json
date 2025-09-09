@@ -1,10 +1,11 @@
 {
-  "active": {
+  "active": {},
+  "completed": {
     "11092025": {
       "id": "11092025",
       "title": "this is a good date trust me",
       "details": "this is a really good and fun date trust me guys pls join",
-      "status": "open",
+      "status": "cancelled",
       "participants": [
         {
           "id": "868546064498688000",
@@ -20,6 +21,5 @@
       "roleId": "1414772102774390824",
       "pingSent": false
     }
-  },
-  "completed": {}
+  }
 }
