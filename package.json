@@ -22,7 +22,7 @@
     "discord.js": "^14.22.1",
     "dotenv": "^17.2.2",
     "express": "^5.1.0",
-    "octokit": "^5.0.3"
+    "octokit": "^3.2.2"
   },
   "engines": {
     "node": ">=18.0.0"
