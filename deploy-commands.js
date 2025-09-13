@@ -75,7 +75,7 @@ const commands = [
         .setRequired(true)
     ),
 
-  new SlashCommandBuilder() // ← NEW COMMAND
+  new SlashCommandBuilder()
     .setName("give-access")
     .setDescription("Grant co-host access to another user")
     .addStringOption((option) =>
