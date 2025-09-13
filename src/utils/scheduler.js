@@ -71,7 +71,10 @@ async function dailySchedulerTick(client) {
         const role = await guild.roles.fetch(gala.roleId);
         if (role) await role.delete(`Gala "${gala.title}" has ended.`);
       } catch (error) {
-        console.warn(`Could not delete role for completed gala ${gala.id}:`, error);
+        console.warn(
+          `Could not delete role for completed gala ${gala.id}:`,
+          error
+        );
       }
 
       try {
