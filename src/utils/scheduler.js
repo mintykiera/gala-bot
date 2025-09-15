@@ -1,5 +1,5 @@
 // src/utils/scheduler.js
-const { saveGalas } = require("../githubManager");
+const { saveGalas } = require("../databaseManager");
 const { galas, completedGalas } = require("../state");
 const { parseDate } = require("./dateParser");
 const { PING_CHANNEL_ID } = require("../config");

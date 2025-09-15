@@ -1,7 +1,7 @@
-// src/commands/closeDoors.js
 const { galas } = require("../state");
-const { saveGalas } = require("../githubManager");
+const { saveGala } = require("../databaseManager"); // Correctly import saveGala
 const { createGalaEmbedAndButtons } = require("../utils/embeds");
+const { MessageFlags } = require("discord.js");
 
 async function execute(interaction) {
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
@@ -36,13 +36,16 @@ async function execute(interaction) {
     }
     const message = await channel.messages.fetch(gala.messageId);
     await message.edit(createGalaEmbedAndButtons(gala));
-    galas.set(galaId, gala);
-    await saveGalas();
+
+    saveGala(gala); // Replaced saveGalas() with saveGala(gala)
+
     return interaction.editReply({
       content: `✅ Closed doors for "**${gala.title}**"!`,
     });
   } catch (err) {
     console.error(`Error updating message for gala ${galaId}:`, err);
+    // Revert state if the message fails to update
+    gala.status = "open";
     return interaction.editReply({
       content:
         "⚠️ An error occurred while updating the gala post. Please try again.",

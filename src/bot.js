@@ -1,14 +1,12 @@
-// src/bot.js
 const {
   Client,
   GatewayIntentBits,
   REST,
   Routes,
   SlashCommandBuilder,
-  MessageFlags,
 } = require("discord.js");
 const { DISCORD_TOKEN, CLIENT_ID, GUILD_ID } = require("./config");
-const { loadGalas } = require("./githubManager");
+const { loadGalas } = require("./databaseManager"); // UPDATED
 const { handleInteraction } = require("./events/interactionCreate");
 const { handleClientReady } = require("./events/clientReady");
 
@@ -31,12 +29,6 @@ const commands = [
         .setName("gala-id")
         .setDescription("Gala date (ID)")
         .setRequired(true)
-    )
-    .addStringOption((option) =>
-      option.setName("new-title").setDescription("New name for the gala")
-    )
-    .addStringOption((option) =>
-      option.setName("new-details").setDescription("New description")
     ),
 
   new SlashCommandBuilder()
@@ -141,7 +133,9 @@ const client = new Client({
   ],
 });
 
-client.once("clientReady", () => handleClientReady(client)); // ← FIXED
+client.once("clientReady", (interaction) =>
+  handleClientReady(interaction, client)
+);
 client.on("interactionCreate", (interaction) =>
   handleInteraction(interaction, client)
 );
@@ -150,7 +144,7 @@ client.on("error", (err) => console.error("⚠️ Global Client Error:", err));
 async function initialize() {
   try {
     console.log("🔧 Initializing bot...");
-    await loadGalas();
+    loadGalas(); // No await needed for the new DB manager
     await deployCommands();
     console.log("✅ Initialization complete.");
     client.login(DISCORD_TOKEN);

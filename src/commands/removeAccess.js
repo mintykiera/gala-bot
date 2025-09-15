@@ -1,6 +1,5 @@
-// src/commands/removeAccess.js
 const { galas } = require("../state");
-const { saveGalas } = require("../githubManager");
+const { saveGala } = require("../databaseManager"); // Correctly import saveGala
 const { MessageFlags, EmbedBuilder } = require("discord.js");
 
 async function execute(interaction) {
@@ -35,10 +34,8 @@ async function execute(interaction) {
     });
   }
 
-  // Remove co-host
   gala.coHosts = gala.coHosts.filter((id) => id !== targetUser.id);
-  galas.set(galaId, gala);
-  await saveGalas();
+  saveGala(gala); // Replaced saveGalas() with saveGala(gala)
 
   // --- DM the user ---
   try {
@@ -63,7 +60,6 @@ async function execute(interaction) {
       `Could not DM user ${targetUser.tag} (${targetUser.id}):`,
       dmError.message
     );
-    // Don't fail the command — some users have DMs disabled
   }
 
   return interaction.editReply({

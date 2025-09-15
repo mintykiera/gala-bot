@@ -1,4 +1,29 @@
 {
-  "active": {},
+  "active": {
+    "28092025": {
+      "id": "28092025",
+      "title": "Chainsaw Man the Movie: Reze Arc Gala",
+      "details": "When: \n- September 28, 2025 (Sunday)\n\nWhere:\n- SM Megamall: ₱400 per ticket, or\n- Central Square Cinemas, Bonifacio High Street, BGC: ₱370-410< per ticket\n\nDinner: \n- Sukiya (SM Megamall)\n- Food District (BGC)\n\nREMINDERS:\n- Make sure to bring enough money! Budget your: Tickets, Snacks, Dinner, etc.\n- As usual, the gala will be around 12:00/1:00 to 7:00/8:00\n- Movie time TBA but will pick around the 3:00-4:00 start\n- Final details to be changed\n- Registrations will also be accepted through <@1414280023409430750> (to be fixed). Type `/whats-on` to check galas and `/seek` to check the details of a specific gala, just enter the code (for this gala, the code is 28092025)\n\n__Pre-requisites__:\n**ANIME**: Chainsaw Man Season 1 (12eps)\n**MANGA**: Up to chapter 38/completed (don’t spoil obv)",
+      "status": "open",
+      "participants": [
+        {
+          "id": "868546064498688000",
+          "username": "kieraesque"
+        },
+        {
+          "id": "738971284318322789",
+          "username": "zzboiii"
+        }
+      ],
+      "coHosts": [],
+      "autoCloseDate": null,
+      "messageId": "1416449191433076909",
+      "channelId": "1414301984328257546",
+      "authorId": "738971284318322789",
+      "authorUsername": "zzboiii",
+      "roleId": "1416449190657261662",
+      "pingSent": false
+    }
+  },
   "completed": {}
 }

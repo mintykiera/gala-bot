@@ -37,3 +37,6 @@ Thumbs.db
 *.bak
 
 discloud.config
+
+# Database Files
+galas.db*

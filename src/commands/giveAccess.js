@@ -1,6 +1,5 @@
-// src/commands/giveAccess.js
 const { galas } = require("../state");
-const { saveGalas } = require("../githubManager");
+const { saveGala } = require("../databaseManager"); // Correctly import saveGala
 const { MessageFlags, EmbedBuilder } = require("discord.js");
 
 async function execute(interaction) {
@@ -29,6 +28,10 @@ async function execute(interaction) {
     });
   }
 
+  if (targetUser.bot) {
+      return interaction.editReply({ content: "❌ You cannot give co-host access to a bot." });
+  }
+
   if (gala.coHosts.includes(targetUser.id)) {
     return interaction.editReply({
       content: `❌ <@${targetUser.id}> is already a co-host.`,
@@ -36,8 +39,7 @@ async function execute(interaction) {
   }
 
   gala.coHosts.push(targetUser.id);
-  galas.set(galaId, gala);
-  await saveGalas();
+  saveGala(gala); // Replaced saveGalas() with saveGala(gala)
 
   // --- DM the user ---
   try {
@@ -63,7 +65,6 @@ async function execute(interaction) {
       `Could not DM user ${targetUser.tag} (${targetUser.id}):`,
       dmError.message
     );
-    // Don't fail the command — some users have DMs disabled
   }
 
   return interaction.editReply({

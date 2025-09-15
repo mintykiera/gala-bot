@@ -8,7 +8,7 @@ const {
   MessageFlags,
 } = require("discord.js");
 const { galas } = require("../state");
-const { saveGalas } = require("../githubManager");
+const { saveGalas } = require("../databaseManager");
 const { parseDate } = require("../utils/dateParser");
 
 async function execute(interaction) {
