@@ -5,7 +5,12 @@
       "title": "say gex",
       "details": "we will say gex",
       "status": "open",
-      "participants": [],
+      "participants": [
+        {
+          "id": "868546064498688000",
+          "username": "kieraesque"
+        }
+      ],
       "coHosts": [],
       "autoCloseDate": null,
       "messageId": "1416964239997927457",
