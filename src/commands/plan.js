@@ -1,14 +1,11 @@
-// src/commands/plan.js
 const {
   ModalBuilder,
   TextInputBuilder,
   TextInputStyle,
   ActionRowBuilder,
-  PermissionsBitField,
   MessageFlags,
 } = require("discord.js");
-const { galas } = require("../state");
-const { saveGalas } = require("../databaseManager");
+const { galas, completedGalas } = require("../state");
 const { parseDate } = require("../utils/dateParser");
 
 async function execute(interaction) {
@@ -26,12 +23,12 @@ async function execute(interaction) {
   today.setHours(0, 0, 0, 0);
   if (isNaN(galaDate.getTime()) || galaDate < today) {
     return interaction.reply({
-      content: "❌ Can't schedule in the past or invalid date.",
+      content: "❌ Can't schedule in the past or on an invalid date.",
       flags: MessageFlags.Ephemeral,
     });
   }
 
-  if (galas.has(date) || require("../state").completedGalas.has(date)) {
+  if (galas.has(date) || completedGalas.has(date)) {
     return interaction.reply({
       content: `❌ A gala with ID \`${date}\` already exists.`,
       flags: MessageFlags.Ephemeral,
@@ -54,9 +51,7 @@ async function execute(interaction) {
     .setCustomId("gala-details")
     .setLabel("Details (Supports Markdown)")
     .setStyle(TextInputStyle.Paragraph)
-    .setPlaceholder(
-      "e.g., Join us for a night of fun! Dress code: formal.\n- Live music\n- Free food"
-    )
+    .setPlaceholder("e.g., Join us for a night of fun! Dress code: formal.")
     .setRequired(true)
     .setMaxLength(2000);
 

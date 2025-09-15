@@ -1,54 +1,47 @@
 const { galas } = require("../state");
-const { saveGala } = require("../databaseManager"); // Correctly import saveGala
+const { saveGala } = require("../databaseManager");
 const { createGalaEmbedAndButtons } = require("../utils/embeds");
 const { MessageFlags } = require("discord.js");
 
 async function execute(interaction) {
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
   const galaId = interaction.options.getString("gala-id");
-  if (!galas.has(galaId)) {
-    return interaction.editReply({
-      content: `❌ No active gala found with ID \`${galaId}\`.`,
-    });
-  }
-
   const gala = galas.get(galaId);
-  const isAuthor = interaction.user.id === gala.authorId;
-  const isCoHost = gala.coHosts?.includes(interaction.user.id) || false;
-  const hasPermission = isAuthor || isCoHost;
 
+  const hasPermission =
+    gala.authorId === interaction.user.id ||
+    gala.coHosts?.includes(interaction.user.id);
   if (!hasPermission) {
     return interaction.editReply({
-      content: "❌ Only the creator or co-hosts can do that.",
+      content: "❌ Only the creator or co-hosts can manage this gala.",
     });
   }
 
   if (gala.status === "open") {
-    return interaction.editReply("✅ Sign-ups are already open.");
+    return interaction.editReply({
+      content: `✅ Sign-ups for "**${gala.title}**" are already open.`,
+    });
   }
 
   gala.status = "open";
 
   try {
     const channel = await interaction.client.channels.fetch(gala.channelId);
-    if (!channel || !channel.isTextBased()) {
-      throw new Error("Channel not found or not text-based for update");
-    }
     const message = await channel.messages.fetch(gala.messageId);
     await message.edit(createGalaEmbedAndButtons(gala));
 
-    saveGala(gala); // Replaced saveGalas() with saveGala(gala)
+    saveGala(gala);
 
     return interaction.editReply({
-      content: `✅ Opened doors for "**${gala.title}**"!`,
+      content: `✅ Sign-ups for "**${gala.title}**" have been opened.`,
     });
   } catch (err) {
-    console.error(`Error updating message for gala ${galaId}:`, err);
-    // Revert state if the message fails to update
     gala.status = "closed";
+    console.error(`Failed to open doors for gala ${gala.id}:`, err);
     return interaction.editReply({
       content:
-        "⚠️ An error occurred while updating the gala post. Please try again.",
+        "⚠️ Could not update the gala message. Please check my permissions.",
     });
   }
 }

@@ -1,5 +1,5 @@
 const { galas } = require("../state");
-const { saveGala } = require("../databaseManager"); // Correctly import saveGala
+const { saveGala } = require("../databaseManager");
 const { MessageFlags, EmbedBuilder } = require("discord.js");
 
 async function execute(interaction) {
@@ -7,13 +7,6 @@ async function execute(interaction) {
 
   const galaId = interaction.options.getString("gala-id");
   const targetUser = interaction.options.getUser("user");
-
-  if (!galas.has(galaId)) {
-    return interaction.editReply({
-      content: `❌ No active gala found with ID \`${galaId}\`.`,
-    });
-  }
-
   const gala = galas.get(galaId);
 
   if (interaction.user.id !== gala.authorId) {
@@ -23,13 +16,13 @@ async function execute(interaction) {
   }
 
   if (targetUser.id === interaction.user.id) {
-    return interaction.editReply({
-      content: "❌ You’re already the host!",
-    });
+    return interaction.editReply({ content: "❌ You’re already the host!" });
   }
 
   if (targetUser.bot) {
-      return interaction.editReply({ content: "❌ You cannot give co-host access to a bot." });
+    return interaction.editReply({
+      content: "❌ You cannot give co-host access to a bot.",
+    });
   }
 
   if (gala.coHosts.includes(targetUser.id)) {
@@ -39,9 +32,8 @@ async function execute(interaction) {
   }
 
   gala.coHosts.push(targetUser.id);
-  saveGala(gala); // Replaced saveGalas() with saveGala(gala)
+  saveGala(gala);
 
-  // --- DM the user ---
   try {
     const dmEmbed = new EmbedBuilder()
       .setColor("#57F287")
@@ -54,21 +46,15 @@ async function execute(interaction) {
         value:
           "You can now use `/tweak`, `/open-doors`, `/close-doors`, and `/cancel-gala` for this event.",
       })
-      .setFooter({
-        text: `Granted by: ${interaction.user.tag}`,
-      })
+      .setFooter({ text: `Granted by: ${interaction.user.tag}` })
       .setTimestamp();
-
     await targetUser.send({ embeds: [dmEmbed] });
   } catch (dmError) {
-    console.warn(
-      `Could not DM user ${targetUser.tag} (${targetUser.id}):`,
-      dmError.message
-    );
+    console.warn(`Could not DM user ${targetUser.tag}:`, dmError.message);
   }
 
   return interaction.editReply({
-    content: `✅ <@${targetUser.id}> is now a co-host of "**${gala.title}**"! A DM has been sent to notify them.`,
+    content: `✅ <@${targetUser.id}> is now a co-host of "**${gala.title}**"!`,
   });
 }
 

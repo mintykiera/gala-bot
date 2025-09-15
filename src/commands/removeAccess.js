@@ -1,5 +1,5 @@
 const { galas } = require("../state");
-const { saveGala } = require("../databaseManager"); // Correctly import saveGala
+const { saveGala } = require("../databaseManager");
 const { MessageFlags, EmbedBuilder } = require("discord.js");
 
 async function execute(interaction) {
@@ -7,13 +7,6 @@ async function execute(interaction) {
 
   const galaId = interaction.options.getString("gala-id");
   const targetUser = interaction.options.getUser("user");
-
-  if (!galas.has(galaId)) {
-    return interaction.editReply({
-      content: `❌ No active gala found with ID \`${galaId}\`.`,
-    });
-  }
-
   const gala = galas.get(galaId);
 
   if (interaction.user.id !== gala.authorId) {
@@ -35,9 +28,8 @@ async function execute(interaction) {
   }
 
   gala.coHosts = gala.coHosts.filter((id) => id !== targetUser.id);
-  saveGala(gala); // Replaced saveGalas() with saveGala(gala)
+  saveGala(gala);
 
-  // --- DM the user ---
   try {
     const dmEmbed = new EmbedBuilder()
       .setColor("#ED4245")
@@ -49,21 +41,15 @@ async function execute(interaction) {
         name: "What this means",
         value: "You can no longer manage this event using admin commands.",
       })
-      .setFooter({
-        text: `Revoked by: ${interaction.user.tag}`,
-      })
+      .setFooter({ text: `Revoked by: ${interaction.user.tag}` })
       .setTimestamp();
-
     await targetUser.send({ embeds: [dmEmbed] });
   } catch (dmError) {
-    console.warn(
-      `Could not DM user ${targetUser.tag} (${targetUser.id}):`,
-      dmError.message
-    );
+    console.warn(`Could not DM user ${targetUser.tag}:`, dmError.message);
   }
 
   return interaction.editReply({
-    content: `✅ Removed <@${targetUser.id}> as co-host of "**${gala.title}**". A DM has been sent to notify them.`,
+    content: `✅ Removed <@${targetUser.id}> as co-host of "**${gala.title}**".`,
   });
 }
 

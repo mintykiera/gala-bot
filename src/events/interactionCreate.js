@@ -1,195 +1,247 @@
-const { galas, buttonCooldowns } = require("../state");
-const { saveGala } = require("../databaseManager"); // UPDATED
+const { galas, completedGalas, buttonCooldowns } = require("../state");
+const { saveGala } = require("../databaseManager");
 const { createGalaEmbedAndButtons } = require("../utils/embeds");
 const { parseDate } = require("../utils/dateParser");
 const { BUTTON_COOLDOWN_SECONDS } = require("../config");
-const { MessageFlags } = require("discord.js");
+const {
+  MessageFlags,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
+  ActionRowBuilder,
+} = require("discord.js");
 
-const commandHandlers = {
-  plan: require("../commands/plan"),
-  tweak: require("../commands/tweak"),
-  "open-doors": require("../commands/openDoors"),
-  "close-doors": require("../commands/closeDoors"),
-  peek: require("../commands/peek"),
-  "whats-on": require("../commands/whatsOn"),
-  help: require("../commands/help"),
-  "past-galas": require("../commands/pastGalas"),
-  "cancel-gala": require("../commands/cancelGala"),
-  "give-access": require("../commands/giveAccess"),
-  "remove-access": require("../commands/removeAccess"),
-};
+const fs = require("fs");
+const commandHandlers = {};
+const commandFiles = fs
+  .readdirSync("./src/commands")
+  .filter((file) => file.endsWith(".js"));
+for (const file of commandFiles) {
+  const commandName = file.split(".")[0];
+  const command = require(`../commands/${file}`);
+  commandHandlers[commandName.toLowerCase()] = command;
+}
 
 async function handleInteraction(interaction, client) {
   if (!interaction.inGuild()) return;
 
   try {
+    if (interaction.isAutocomplete()) {
+      const focusedValue = interaction.options.getFocused().toLowerCase();
+      let choices = [];
+
+      for (const [id, gala] of galas.entries()) {
+        if (
+          gala.title.toLowerCase().includes(focusedValue) ||
+          id.toLowerCase().includes(focusedValue)
+        ) {
+          choices.push({
+            name: `[${id}] ${gala.title.substring(0, 70)}`,
+            value: id,
+          });
+        }
+      }
+
+      if (interaction.commandName === "peek") {
+        for (const [id, gala] of completedGalas.entries()) {
+          if (
+            gala.title.toLowerCase().includes(focusedValue) ||
+            id.toLowerCase().includes(focusedValue)
+          ) {
+            choices.push({
+              name: `[PAST] ${id} - ${gala.title.substring(0, 60)}`,
+              value: id,
+            });
+          }
+        }
+      }
+      await interaction.respond(choices.slice(0, 25));
+      return;
+    }
+
     if (interaction.isChatInputCommand()) {
-      const handler = commandHandlers[interaction.commandName];
+      const handler =
+        commandHandlers[
+          interaction.commandName.toLowerCase().replace(/-/g, "")
+        ];
       if (handler) {
         return await handler.execute(interaction, client);
       }
     }
 
     if (interaction.isModalSubmit()) {
-      const [customId, date] = interaction.customId.split("_");
+      const [customIdPrefix, galaId] = interaction.customId.split("_");
 
-      // Handle plan modal
-      if (customId === "plan-gala-modal") {
+      if (customIdPrefix === "plan-gala-modal") {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         const title = interaction.fields.getTextInputValue("gala-title");
         const details = interaction.fields.getTextInputValue("gala-details");
-        const autoCloseDateString = interaction.fields.getTextInputValue("auto-close-date").trim();
-
-        if (!interaction.guild.members.me.permissions.has("ManageRoles")) {
-          return interaction.editReply({
-            content: "❌ I need the 'Manage Roles' permission to create a role for the gala!",
-          });
-        }
-
-        const roleName = `Gala: ${title.substring(0, 50)}`;
-        let galaRole;
-        try {
-          galaRole = await interaction.guild.roles.create({ name: roleName, mentionable: true, reason: `Role for gala: ${title}` });
-        } catch (roleErr) {
-          return interaction.editReply({ content: "❌ Failed to create a role. Please check my permissions." });
-        }
+        const autoCloseDateString = interaction.fields
+          .getTextInputValue("auto-close-date")
+          .trim();
 
         let autoCloseDate = null;
         if (autoCloseDateString) {
           if (!/^\d{8}$/.test(autoCloseDateString)) {
-            return interaction.editReply({ content: "❌ Invalid auto-close date. Use DDMMYYYY." });
+            return interaction.editReply({
+              content: "❌ Invalid auto-close date format. Use DDMMYYYY.",
+            });
           }
           const parsedDate = parseDate(autoCloseDateString);
-          const today = new Date();
-          today.setHours(0, 0, 0, 0);
-          if (isNaN(parsedDate.getTime()) || parsedDate < today) {
-            return interaction.editReply({ content: "❌ Auto-close date can't be in the past." });
-          }
-          if (parsedDate >= parseDate(date)) {
-            return interaction.editReply({ content: "❌ Auto-close date must be BEFORE the gala date." });
+          if (isNaN(parsedDate.getTime()) || parsedDate >= parseDate(galaId)) {
+            return interaction.editReply({
+              content:
+                "❌ Auto-close date must be a valid date set BEFORE the gala.",
+            });
           }
           autoCloseDate = autoCloseDateString;
         }
 
         const newGala = {
-          id: date,
+          id: galaId,
           title,
           details,
           status: "open",
           participants: [],
           coHosts: [],
-          autoCloseDate: autoCloseDate,
+          autoCloseDate,
           messageId: null,
           channelId: interaction.channelId,
           authorId: interaction.user.id,
           authorUsername: interaction.user.username,
-          roleId: galaRole.id,
+          roleId: null,
           pingSent: false,
         };
 
         try {
-          const message = await interaction.channel.send(createGalaEmbedAndButtons(newGala));
+          const roleName = `Gala: ${title.substring(0, 50)}`;
+          const galaRole = await interaction.guild.roles.create({
+            name: roleName,
+            mentionable: true,
+          });
+          newGala.roleId = galaRole.id;
+
+          const message = await interaction.channel.send(
+            createGalaEmbedAndButtons(newGala)
+          );
           newGala.messageId = message.id;
-        } catch (msgErr) {
-          await galaRole.delete("Failed to announce gala").catch(err => console.warn("Failed to clean up role:", err));
-          return interaction.editReply({ content: "❌ Failed to post the gala announcement." });
+
+          galas.set(galaId, newGala);
+          saveGala(newGala);
+
+          return interaction.editReply({
+            content: `🎉 Gala "**${title}**" scheduled for \`${galaId}\`!`,
+          });
+        } catch (err) {
+          if (newGala.roleId) {
+            await interaction.guild.roles
+              .delete(newGala.roleId)
+              .catch(() => {});
+          }
+          console.error("Error during gala creation:", err);
+          return interaction.editReply({
+            content: "❌ Failed to create role or post announcement.",
+          });
         }
-
-        galas.set(date, newGala);
-        saveGala(newGala); // UPDATED
-
-        return interaction.editReply({ content: `🎉 Gala "**${title}**" scheduled for \`${date}\`!` });
       }
 
-      // Handle tweak modal
-      if (customId === "tweak-gala-modal") {
+      if (customIdPrefix === "tweak-gala-modal") {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-        const galaId = date;
+
         const gala = galas.get(galaId);
+        if (!gala) return;
 
-        if (!gala || !(gala.authorId === interaction.user.id || gala.coHosts?.includes(interaction.user.id))) {
-          return interaction.editReply({ content: "❌ You don't have permission to edit this gala." });
-        }
-
-        const newTitle = interaction.fields.getTextInputValue("new-title").trim();
-        const newDetails = interaction.fields.getTextInputValue("new-details");
-        const autoCloseDateString = interaction.fields.getTextInputValue("auto-close-date").trim();
-
-        if (!newTitle) return interaction.editReply({ content: "❌ Title cannot be empty." });
-
-        if (autoCloseDateString) {
-          if (!/^\d{8}$/.test(autoCloseDateString)) return interaction.editReply({ content: "❌ Invalid date format. Use DDMMYYYY." });
-          if (parseDate(autoCloseDateString) >= parseDate(gala.id)) return interaction.editReply({ content: "❌ Auto-close date must be BEFORE the gala date." });
-        }
-
-        gala.title = newTitle;
-        gala.details = newDetails;
+        gala.title = interaction.fields.getTextInputValue("new-title");
+        gala.details = interaction.fields.getTextInputValue("new-details");
+        const autoCloseDateString = interaction.fields
+          .getTextInputValue("auto-close-date")
+          .trim();
         gala.autoCloseDate = autoCloseDateString || null;
-        
+
         try {
           const channel = await client.channels.fetch(gala.channelId);
           const message = await channel.messages.fetch(gala.messageId);
           await message.edit(createGalaEmbedAndButtons(gala));
-          
-          saveGala(gala); // UPDATED
-          
-          return interaction.editReply({ content: `✅ Successfully updated "**${gala.title}**"!` });
+
+          saveGala(gala);
+
+          return interaction.editReply({
+            content: `✅ Successfully updated "**${gala.title}**"!`,
+          });
         } catch (err) {
           console.error(`Failed to update gala ${galaId}:`, err);
-          return interaction.editReply({ content: "⚠️ Failed to update the gala message. Please check my permissions." });
+          return interaction.editReply({
+            content: "⚠️ Failed to update gala message.",
+          });
         }
       }
     }
 
     if (interaction.isButton()) {
-      await interaction.deferUpdate();
       const [action, galaId] = interaction.customId.split("_");
       const gala = galas.get(galaId);
-
       if (!gala) return;
-      if (gala.status !== "open") return;
+
+      if (gala.status !== "open") {
+        await interaction.deferUpdate();
+        return;
+      }
 
       const cooldownKey = `${interaction.user.id}-${galaId}`;
       const now = Date.now();
-      const cooldown = buttonCooldowns.get(cooldownKey);
-      if (cooldown && now - cooldown < BUTTON_COOLDOWN_SECONDS * 1000) return;
+      if (
+        buttonCooldowns.has(cooldownKey) &&
+        now - buttonCooldowns.get(cooldownKey) < BUTTON_COOLDOWN_SECONDS * 1000
+      ) {
+        await interaction.deferUpdate();
+        return;
+      }
       buttonCooldowns.set(cooldownKey, now);
 
       const member = interaction.member;
       const isJoined = gala.participants.some((p) => p.id === member.id);
-      const role = await interaction.guild.roles.fetch(gala.roleId).catch(() => null);
-      if (!role) return;
-
-      if (action === "join-gala" && !isJoined) {
-        gala.participants.push({ id: member.id, username: member.user.username });
-        await member.roles.add(role).catch(() => {
-            gala.participants = gala.participants.filter((p) => p.id !== member.id); // Revert state on failure
-        });
-      } else if (action === "leave-gala" && isJoined) {
-        gala.participants = gala.participants.filter((p) => p.id !== member.id);
-        await member.roles.remove(role).catch(() => {
-            if (!gala.participants.some((p) => p.id === member.id)) { // Revert state on failure
-                gala.participants.push({ id: member.id, username: member.user.username });
-            }
-        });
+      const role = await interaction.guild.roles
+        .fetch(gala.roleId)
+        .catch(() => null);
+      if (!role) {
+        await interaction.deferUpdate();
+        return;
       }
-      
-      await interaction.message.edit(createGalaEmbedAndButtons(gala));
-      saveGala(gala); // UPDATED
+
+      let needsSave = false;
+      if (action === "join-gala" && !isJoined) {
+        await member.roles
+          .add(role)
+          .then(() => {
+            gala.participants.push({
+              id: member.id,
+              username: member.user.username,
+            });
+            needsSave = true;
+          })
+          .catch((err) => console.error("Failed to add role:", err));
+      } else if (action === "leave-gala" && isJoined) {
+        await member.roles
+          .remove(role)
+          .then(() => {
+            gala.participants = gala.participants.filter(
+              (p) => p.id !== member.id
+            );
+            needsSave = true;
+          })
+          .catch((err) => console.error("Failed to remove role:", err));
+      }
+
+      if (needsSave) {
+        await interaction.message.edit(createGalaEmbedAndButtons(gala));
+        saveGala(gala);
+      } else {
+        await interaction.deferUpdate();
+      }
     }
   } catch (err) {
-    console.error("⚠️ Interaction Error:", err);
-    const errorMessage = "❌ An unexpected error occurred. Please try again later.";
-    try {
-      if (interaction.replied || interaction.deferred) {
-        await interaction.followUp({ content: errorMessage, flags: MessageFlags.Ephemeral });
-      } else {
-        await interaction.reply({ content: errorMessage, flags: MessageFlags.Ephemeral });
-      }
-    } catch (responseErr) {
-      console.error("CRITICAL: Failed to send error message to user.", responseErr);
-    }
+    console.error("⚠️ Top-Level Interaction Error:", err);
   }
 }
 

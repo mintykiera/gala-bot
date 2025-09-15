@@ -6,85 +6,90 @@ const {
   SlashCommandBuilder,
 } = require("discord.js");
 const { DISCORD_TOKEN, CLIENT_ID, GUILD_ID } = require("./config");
-const { loadGalas } = require("./databaseManager"); // UPDATED
+const { loadGalas } = require("./databaseManager");
 const { handleInteraction } = require("./events/interactionCreate");
 const { handleClientReady } = require("./events/clientReady");
 
 const commands = [
   new SlashCommandBuilder()
     .setName("plan")
-    .setDescription("Schedule a new gala event using a pop-up form")
+    .setDescription("Schedule a new gala event using a pop-up form.")
     .addStringOption((option) =>
       option
         .setName("date")
-        .setDescription("When? Format: DDMMYYYY (e.g., 24082025)")
+        .setDescription(
+          "The date of the gala, which will be its ID. Format: DDMMYYYY"
+        )
         .setRequired(true)
     ),
-
   new SlashCommandBuilder()
     .setName("tweak")
     .setDescription("Edit your gala's name or details")
     .addStringOption((option) =>
       option
         .setName("gala-id")
-        .setDescription("Gala date (ID)")
+        .setDescription("Start typing the gala title or ID to search.")
         .setRequired(true)
+        .setAutocomplete(true)
     ),
-
   new SlashCommandBuilder()
     .setName("open-doors")
     .setDescription("Open sign-ups for your gala")
     .addStringOption((option) =>
-      option.setName("gala-id").setDescription("Which gala?").setRequired(true)
+      option
+        .setName("gala-id")
+        .setDescription("Start typing the gala title or ID to search.")
+        .setRequired(true)
+        .setAutocomplete(true)
     ),
-
   new SlashCommandBuilder()
     .setName("close-doors")
     .setDescription("Close sign-ups for your gala")
     .addStringOption((option) =>
-      option.setName("gala-id").setDescription("Which gala?").setRequired(true)
+      option
+        .setName("gala-id")
+        .setDescription("Start typing the gala title or ID to search.")
+        .setRequired(true)
+        .setAutocomplete(true)
     ),
-
   new SlashCommandBuilder()
     .setName("peek")
     .setDescription("See details of a specific gala")
     .addStringOption((option) =>
       option
         .setName("gala-id")
-        .setDescription("Gala date (ID)")
+        .setDescription("Start typing the gala title or ID to search.")
         .setRequired(true)
+        .setAutocomplete(true)
     ),
-
   new SlashCommandBuilder()
     .setName("whats-on")
     .setDescription("See all upcoming galas"),
-
   new SlashCommandBuilder()
     .setName("help")
     .setDescription("Show all commands and how to use them!"),
-
   new SlashCommandBuilder()
     .setName("past-galas")
     .setDescription("See all completed galas and their stats!"),
-
   new SlashCommandBuilder()
     .setName("cancel-gala")
-    .setDescription("Cancel your gala (author only)")
+    .setDescription("Cancel your gala (author or co-host only)")
     .addStringOption((option) =>
       option
         .setName("gala-id")
-        .setDescription("Gala date (ID)")
+        .setDescription("Start typing the gala title or ID to search.")
         .setRequired(true)
+        .setAutocomplete(true)
     ),
-
   new SlashCommandBuilder()
     .setName("give-access")
     .setDescription("Grant co-host access to another user")
     .addStringOption((option) =>
       option
         .setName("gala-id")
-        .setDescription("Gala date (ID)")
+        .setDescription("Start typing the gala title or ID to search.")
         .setRequired(true)
+        .setAutocomplete(true)
     )
     .addUserOption((option) =>
       option
@@ -92,15 +97,15 @@ const commands = [
         .setDescription("User to grant access to")
         .setRequired(true)
     ),
-
   new SlashCommandBuilder()
     .setName("remove-access")
     .setDescription("Remove co-host access from a user")
     .addStringOption((option) =>
       option
         .setName("gala-id")
-        .setDescription("Gala date (ID)")
+        .setDescription("Start typing the gala title or ID to search.")
         .setRequired(true)
+        .setAutocomplete(true)
     )
     .addUserOption((option) =>
       option
@@ -133,9 +138,7 @@ const client = new Client({
   ],
 });
 
-client.once("clientReady", (interaction) =>
-  handleClientReady(interaction, client)
-);
+client.once("ready", (c) => handleClientReady(c));
 client.on("interactionCreate", (interaction) =>
   handleInteraction(interaction, client)
 );
@@ -144,7 +147,7 @@ client.on("error", (err) => console.error("⚠️ Global Client Error:", err));
 async function initialize() {
   try {
     console.log("🔧 Initializing bot...");
-    loadGalas(); // No await needed for the new DB manager
+    loadGalas();
     await deployCommands();
     console.log("✅ Initialization complete.");
     client.login(DISCORD_TOKEN);
